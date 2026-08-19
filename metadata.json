@@ -1,0 +1,7 @@
+{
+  "name": "BCS Diary",
+  "description": "Aesthetic mobile-first BCS study diary and task management app for students with Google Drive lecture resources, streak counters, and weekly analytics",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
