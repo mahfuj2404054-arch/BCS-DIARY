@@ -88,10 +88,16 @@ fun ProgressDashboardScreen(
     modifier: Modifier = Modifier
 ) {
     val colors = AppTheme.colors
-    val totalTasks = tasksWithDetails.size
-    val completedTasks = tasksWithDetails.count { it.isCompletedByCurrentUser }
-    val pendingTasks = totalTasks - completedTasks
-    val overallRate = if (totalTasks > 0) (completedTasks.toFloat() / totalTasks * 100).toInt() else 0
+    
+    val totalTasks = remember(tasksWithDetails) { tasksWithDetails.size }
+    val completedTasks = remember(tasksWithDetails) { tasksWithDetails.count { it.isCompletedByCurrentUser } }
+    val pendingTasks = remember(totalTasks, completedTasks) { totalTasks - completedTasks }
+    val overallRate = remember(totalTasks, completedTasks) {
+        if (totalTasks > 0) (completedTasks.toFloat() / totalTasks * 100).toInt() else 0
+    }
+    val myLogs = remember(userCompletions, currentUser.id) {
+        userCompletions.filter { it.userId == currentUser.id }.take(5)
+    }
 
     LazyColumn(
         modifier = modifier
@@ -329,7 +335,6 @@ fun ProgressDashboardScreen(
             Spacer(modifier = Modifier.height(10.dp))
         }
 
-        val myLogs = userCompletions.filter { it.userId == currentUser.id }
         if (myLogs.isEmpty()) {
             item {
                 Text(
@@ -339,8 +344,8 @@ fun ProgressDashboardScreen(
                 )
             }
         } else {
-            items(myLogs.take(5)) { log ->
-                val timeFormat = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
+            items(myLogs, key = { it.id }) { log ->
+                val timeFormat = remember { SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()) }
                 val formattedTime = timeFormat.format(Date(log.completedAt))
 
                 Surface(

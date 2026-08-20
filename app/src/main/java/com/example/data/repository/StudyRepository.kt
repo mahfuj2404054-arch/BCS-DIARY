@@ -58,7 +58,7 @@ class StudyRepository(
         // Synchronize users
         usersListener?.remove()
         usersListener = fs.observeUsers { firestoreUsers ->
-            scope.launch {
+            scope.launch(Dispatchers.IO) {
                 studyDao.syncUsersTransaction(firestoreUsers)
             }
         }
@@ -66,7 +66,7 @@ class StudyRepository(
         // Synchronize tasks
         tasksListener?.remove()
         tasksListener = fs.observeTasks { firestoreTasks ->
-            scope.launch {
+            scope.launch(Dispatchers.IO) {
                 studyDao.syncTasksTransaction(firestoreTasks)
             }
         }
@@ -74,7 +74,7 @@ class StudyRepository(
         // Synchronize subjects
         subjectsListener?.remove()
         subjectsListener = fs.observeSubjects { firestoreSubjects ->
-            scope.launch {
+            scope.launch(Dispatchers.IO) {
                 studyDao.syncSubjectsTransaction(firestoreSubjects)
             }
         }
@@ -82,7 +82,7 @@ class StudyRepository(
         // Synchronize topics
         topicsListener?.remove()
         topicsListener = fs.observeTopics { firestoreTopics ->
-            scope.launch {
+            scope.launch(Dispatchers.IO) {
                 studyDao.syncTopicsTransaction(firestoreTopics)
             }
         }
@@ -90,7 +90,7 @@ class StudyRepository(
         // Synchronize completions
         completionsListener?.remove()
         completionsListener = fs.observeCompletions { firestoreCompletions ->
-            scope.launch {
+            scope.launch(Dispatchers.IO) {
                 studyDao.syncCompletionsTransaction(firestoreCompletions)
             }
         }

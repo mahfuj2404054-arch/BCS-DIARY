@@ -19,6 +19,10 @@ data class UserEntity(
     val email: String,
     val role: UserRole,
     val avatarColorHex: String = "#3B82F6",
+    val photoUri: String? = null,
+    val dateOfBirth: String? = null,
+    val bio: String? = null,
+    val schoolOrGrade: String? = null,
     val streakDays: Int = 0,
     val lastActiveDate: String = ""
 )

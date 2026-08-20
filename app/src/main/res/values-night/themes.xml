@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.MyApplication" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#111827</item>
+        <item name="android:colorBackground">#111827</item>
+        <item name="android:statusBarColor">#111827</item>
+        <item name="android:navigationBarColor">#111827</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
+        <!-- Android 12+ Splash Screen Attributes -->
+        <item name="android:windowSplashScreenBackground" tools:targetApi="31">#111827</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="31">@mipmap/ic_launcher</item>
+    </style>
+</resources>

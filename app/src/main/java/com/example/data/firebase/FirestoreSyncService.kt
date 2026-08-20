@@ -49,6 +49,10 @@ class FirestoreSyncService(private val context: Context) {
                 "email" to user.email,
                 "role" to user.role.name,
                 "avatarColorHex" to user.avatarColorHex,
+                "photoUri" to user.photoUri,
+                "dateOfBirth" to user.dateOfBirth,
+                "bio" to user.bio,
+                "schoolOrGrade" to user.schoolOrGrade,
                 "streakDays" to user.streakDays,
                 "lastActiveDate" to user.lastActiveDate,
                 "updatedAt" to System.currentTimeMillis()
@@ -75,6 +79,10 @@ class FirestoreSyncService(private val context: Context) {
                         UserRole.STUDENT
                     },
                     avatarColorHex = doc.getString("avatarColorHex") ?: "#8B5CF6",
+                    photoUri = doc.getString("photoUri"),
+                    dateOfBirth = doc.getString("dateOfBirth"),
+                    bio = doc.getString("bio"),
+                    schoolOrGrade = doc.getString("schoolOrGrade"),
                     streakDays = doc.getLong("streakDays")?.toInt() ?: 1,
                     lastActiveDate = doc.getString("lastActiveDate") ?: ""
                 )
@@ -120,6 +128,10 @@ class FirestoreSyncService(private val context: Context) {
                                     UserRole.STUDENT
                                 },
                                 avatarColorHex = doc.getString("avatarColorHex") ?: "#8B5CF6",
+                                photoUri = doc.getString("photoUri"),
+                                dateOfBirth = doc.getString("dateOfBirth"),
+                                bio = doc.getString("bio"),
+                                schoolOrGrade = doc.getString("schoolOrGrade"),
                                 streakDays = doc.getLong("streakDays")?.toInt() ?: 1,
                                 lastActiveDate = doc.getString("lastActiveDate") ?: ""
                             )

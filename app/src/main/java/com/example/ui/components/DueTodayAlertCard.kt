@@ -181,36 +181,6 @@ fun DueTodayAlertCard(
                             )
                         }
                     }
-
-                    // Send Notification Button
-                    if (!isAllCompleted) {
-                        IconButton(
-                            onClick = {
-                                TaskNotificationHelper.sendDueTodayNotification(context, pendingDueToday)
-                                Toast.makeText(
-                                    context,
-                                    "🔔 Notification posted for ${pendingDueToday.size} task(s) due today!",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            },
-                            modifier = Modifier.testTag("btn_trigger_notification")
-                        ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.pillBg)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.NotificationsActive,
-                                    contentDescription = "Post Notification Alert",
-                                    tint = colors.primary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                    }
                 }
 
                 // Task Items Preview List (Up to 3 items)

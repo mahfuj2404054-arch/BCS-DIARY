@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.AutoGraph
@@ -50,6 +52,7 @@ import com.example.ui.components.CreateSubjectDialog
 import com.example.ui.components.CreateTaskBottomSheet
 import com.example.ui.components.CreateTopicDialog
 import com.example.ui.components.LeaderboardDialog
+import com.example.ui.components.NotificationPermissionPromptHandler
 import com.example.ui.components.ThemeSelectionBottomSheet
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.ProgressDashboardScreen
@@ -106,6 +109,14 @@ fun StudyTaskApp(
     val systemInDark = isSystemInDarkTheme()
     val effectiveDarkTheme = isDarkThemeOverride ?: systemInDark
 
+    val pagerState = rememberPagerState(initialPage = activeTab.ordinal) { 4 }
+
+    LaunchedEffect(activeTab) {
+        if (pagerState.currentPage != activeTab.ordinal) {
+            pagerState.scrollToPage(activeTab.ordinal)
+        }
+    }
+
     var currentScreen by remember { mutableStateOf<Screen>(if (currentUser != null) Screen.StudentMain else Screen.Login) }
     var showThemePicker by remember { mutableStateOf(false) }
     var showLeaderboardDialog by remember { mutableStateOf(false) }
@@ -124,6 +135,26 @@ fun StudyTaskApp(
     val onToggleDarkTheme = remember(viewModel) { { viewModel.toggleDarkTheme() } }
     val onOpenThemePicker = remember { { showThemePicker = true } }
     val onOpenLeaderboard = remember { { showLeaderboardDialog = true } }
+    val onSelectTopicFilter = remember(allTopics, viewModel) {
+        { topicId: String ->
+            val topic = allTopics.find { it.id == topicId }
+            if (topic != null) {
+                viewModel.setSearchQuery(topic.name)
+                viewModel.setActiveTab(StudentTab.TASKS)
+            }
+        }
+    }
+    val onSelectSubject = remember(viewModel) {
+        { subjectId: String ->
+            viewModel.setSubjectFilter(subjectId)
+            viewModel.setActiveTab(StudentTab.TASKS)
+        }
+    }
+    val onSaveProfile = remember(viewModel) {
+        { name: String, photoUri: String?, dateOfBirth: String?, bio: String?, schoolOrGrade: String?, avatarColorHex: String ->
+            viewModel.updateUserProfile(name, photoUri, dateOfBirth, bio, schoolOrGrade, avatarColorHex)
+        }
+    }
 
     // Synchronize authentication state to route
     LaunchedEffect(currentUser) {
@@ -172,6 +203,9 @@ fun StudyTaskApp(
     ) {
         val colors = AppTheme.colors
 
+        // Request notification permission dialog on first launch after login
+        NotificationPermissionPromptHandler(isUserLoggedIn = currentUser != null)
+
         Scaffold(
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
             bottomBar = {
@@ -184,11 +218,16 @@ fun StudyTaskApp(
                     ) {
                         // Tab 1: Today's Tasks
                         NavigationBarItem(
-                            selected = activeTab == StudentTab.TASKS,
-                            onClick = { viewModel.setActiveTab(StudentTab.TASKS) },
+                            selected = pagerState.currentPage == 0,
+                            onClick = {
+                                if (pagerState.currentPage != 0) {
+                                    scope.launch { pagerState.scrollToPage(0) }
+                                    viewModel.setActiveTab(StudentTab.TASKS)
+                                }
+                            },
                             icon = {
                                 Icon(
-                                    imageVector = if (activeTab == StudentTab.TASKS) Icons.Filled.Assignment else Icons.Outlined.Assignment,
+                                    imageVector = if (pagerState.currentPage == 0) Icons.Filled.Assignment else Icons.Outlined.Assignment,
                                     contentDescription = "Tasks",
                                     modifier = Modifier.size(22.dp)
                                 )
@@ -206,11 +245,16 @@ fun StudyTaskApp(
 
                         // Tab 2: [Topics]
                         NavigationBarItem(
-                            selected = activeTab == StudentTab.TOPICS,
-                            onClick = { viewModel.setActiveTab(StudentTab.TOPICS) },
+                            selected = pagerState.currentPage == 1,
+                            onClick = {
+                                if (pagerState.currentPage != 1) {
+                                    scope.launch { pagerState.scrollToPage(1) }
+                                    viewModel.setActiveTab(StudentTab.TOPICS)
+                                }
+                            },
                             icon = {
                                 Icon(
-                                    imageVector = if (activeTab == StudentTab.TOPICS) Icons.Filled.Topic else Icons.Outlined.Topic,
+                                    imageVector = if (pagerState.currentPage == 1) Icons.Filled.Topic else Icons.Outlined.Topic,
                                     contentDescription = "Topics",
                                     modifier = Modifier.size(22.dp)
                                 )
@@ -228,11 +272,16 @@ fun StudyTaskApp(
 
                         // Tab 3: [Subjects]
                         NavigationBarItem(
-                            selected = activeTab == StudentTab.SUBJECTS,
-                            onClick = { viewModel.setActiveTab(StudentTab.SUBJECTS) },
+                            selected = pagerState.currentPage == 2,
+                            onClick = {
+                                if (pagerState.currentPage != 2) {
+                                    scope.launch { pagerState.scrollToPage(2) }
+                                    viewModel.setActiveTab(StudentTab.SUBJECTS)
+                                }
+                            },
                             icon = {
                                 Icon(
-                                    imageVector = if (activeTab == StudentTab.SUBJECTS) Icons.Filled.MenuBook else Icons.Outlined.MenuBook,
+                                    imageVector = if (pagerState.currentPage == 2) Icons.Filled.MenuBook else Icons.Outlined.MenuBook,
                                     contentDescription = "Subjects",
                                     modifier = Modifier.size(22.dp)
                                 )
@@ -250,11 +299,16 @@ fun StudyTaskApp(
 
                         // Tab 4: [Progress Analytics]
                         NavigationBarItem(
-                            selected = activeTab == StudentTab.PROGRESS,
-                            onClick = { viewModel.setActiveTab(StudentTab.PROGRESS) },
+                            selected = pagerState.currentPage == 3,
+                            onClick = {
+                                if (pagerState.currentPage != 3) {
+                                    scope.launch { pagerState.scrollToPage(3) }
+                                    viewModel.setActiveTab(StudentTab.PROGRESS)
+                                }
+                            },
                             icon = {
                                 Icon(
-                                    imageVector = if (activeTab == StudentTab.PROGRESS) Icons.Filled.AutoGraph else Icons.Outlined.AutoGraph,
+                                    imageVector = if (pagerState.currentPage == 3) Icons.Filled.AutoGraph else Icons.Outlined.AutoGraph,
                                     contentDescription = "Progress",
                                     modifier = Modifier.size(22.dp)
                                 )
@@ -301,61 +355,60 @@ fun StudyTaskApp(
                         is Screen.StudentMain -> {
                             val user = currentUser
                             if (user != null) {
-                                when (activeTab) {
-                                    StudentTab.TASKS -> {
-                                        StudentDashboardScreen(
-                                            currentUser = user,
-                                            tasks = filteredTasks,
-                                            allTasks = tasksWithDetails,
-                                            allSubjects = allSubjects,
-                                            searchQuery = searchQuery,
-                                            selectedSubjectFilter = selectedSubjectFilter,
-                                            taskFilter = taskFilter,
-                                            onSearchQueryChange = onSearchQueryChange,
-                                            onSubjectFilterChange = onSubjectFilterChange,
-                                            onTaskFilterChange = onTaskFilterChange,
-                                            onTaskClick = onTaskClick,
-                                            onToggleComplete = onToggleComplete,
-                                            onSwitchAccount = onSwitchAccount,
-                                            isDarkTheme = effectiveDarkTheme,
-                                            onToggleDarkTheme = onToggleDarkTheme,
-                                            onOpenThemePicker = onOpenThemePicker,
-                                            onOpenLeaderboard = onOpenLeaderboard
-                                        )
-                                    }
+                                HorizontalPager(
+                                    state = pagerState,
+                                    userScrollEnabled = false,
+                                    beyondViewportPageCount = 3,
+                                    modifier = Modifier.fillMaxSize()
+                                ) { page ->
+                                    when (page) {
+                                        0 -> {
+                                            StudentDashboardScreen(
+                                                currentUser = user,
+                                                tasks = filteredTasks,
+                                                allTasks = tasksWithDetails,
+                                                allSubjects = allSubjects,
+                                                searchQuery = searchQuery,
+                                                selectedSubjectFilter = selectedSubjectFilter,
+                                                taskFilter = taskFilter,
+                                                onSearchQueryChange = onSearchQueryChange,
+                                                onSubjectFilterChange = onSubjectFilterChange,
+                                                onTaskFilterChange = onTaskFilterChange,
+                                                onTaskClick = onTaskClick,
+                                                onToggleComplete = onToggleComplete,
+                                                onSwitchAccount = onSwitchAccount,
+                                                isDarkTheme = effectiveDarkTheme,
+                                                onToggleDarkTheme = onToggleDarkTheme,
+                                                onOpenThemePicker = onOpenThemePicker,
+                                                onOpenLeaderboard = onOpenLeaderboard,
+                                                onSaveProfile = onSaveProfile
+                                            )
+                                        }
 
-                                    StudentTab.TOPICS -> {
-                                        TopicsScreen(
-                                            topicsWithStats = topicsWithStats,
-                                            onSelectTopicFilter = { topicId ->
-                                                val topic = allTopics.find { it.id == topicId }
-                                                if (topic != null) {
-                                                    viewModel.setSearchQuery(topic.name)
-                                                    viewModel.setActiveTab(StudentTab.TASKS)
-                                                }
-                                            }
-                                        )
-                                    }
+                                        1 -> {
+                                            TopicsScreen(
+                                                topicsWithStats = topicsWithStats,
+                                                onSelectTopicFilter = onSelectTopicFilter
+                                            )
+                                        }
 
-                                    StudentTab.SUBJECTS -> {
-                                        SubjectsScreen(
-                                            subjectsWithStats = subjectsWithStats,
-                                            onSelectSubject = { subjectId ->
-                                                viewModel.setSubjectFilter(subjectId)
-                                                viewModel.setActiveTab(StudentTab.TASKS)
-                                            }
-                                        )
-                                    }
+                                        2 -> {
+                                            SubjectsScreen(
+                                                subjectsWithStats = subjectsWithStats,
+                                                onSelectSubject = onSelectSubject
+                                            )
+                                        }
 
-                                    StudentTab.PROGRESS -> {
-                                        ProgressDashboardScreen(
-                                            currentUser = user,
-                                            tasksWithDetails = tasksWithDetails,
-                                            subjectsWithStats = subjectsWithStats,
-                                            userCompletions = allCompletionLogs,
-                                             isDarkTheme = effectiveDarkTheme,
-                                            onToggleDarkTheme = { viewModel.toggleDarkTheme() }
-                                        )
+                                        3 -> {
+                                            ProgressDashboardScreen(
+                                                currentUser = user,
+                                                tasksWithDetails = tasksWithDetails,
+                                                subjectsWithStats = subjectsWithStats,
+                                                userCompletions = allCompletionLogs,
+                                                isDarkTheme = effectiveDarkTheme,
+                                                onToggleDarkTheme = onToggleDarkTheme
+                                            )
+                                        }
                                     }
                                 }
                             }

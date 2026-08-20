@@ -47,12 +47,10 @@ class FirebaseAuthService(private val context: Context) {
 
     private val auth: FirebaseAuth? by lazy {
         try {
-            if (FirebaseApp.getApps(context).isNotEmpty()) {
-                FirebaseAuth.getInstance()
-            } else {
+            if (FirebaseApp.getApps(context).isEmpty()) {
                 FirebaseApp.initializeApp(context)
-                FirebaseAuth.getInstance()
             }
+            FirebaseAuth.getInstance()
         } catch (e: Exception) {
             Log.e(tag, "Failed to initialize Firebase Auth: ${e.message}")
             null
@@ -60,7 +58,15 @@ class FirebaseAuthService(private val context: Context) {
     }
 
     val currentFirebaseUser: FirebaseUser?
-        get() = auth?.currentUser
+        get() = try {
+            if (FirebaseApp.getApps(context).isNotEmpty()) {
+                FirebaseAuth.getInstance().currentUser
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
 
     fun isFirebaseAvailable(): Boolean = auth != null
 

@@ -1,9 +1,14 @@
 package com.example.ui.screens
 
+import android.graphics.ImageDecoder
+import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,14 +35,20 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import com.example.ui.components.DueTodayAlertCard
+import com.example.ui.components.EditProfileDialog
 import com.example.util.TaskNotificationHelper
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -105,6 +116,7 @@ fun StudentDashboardScreen(
     onToggleDarkTheme: () -> Unit = {},
     onOpenThemePicker: () -> Unit = {},
     onOpenLeaderboard: () -> Unit = {},
+    onSaveProfile: (name: String, photoUri: String?, dateOfBirth: String?, bio: String?, schoolOrGrade: String?, avatarColorHex: String) -> Unit = { _, _, _, _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -116,6 +128,13 @@ fun StudentDashboardScreen(
 
     var selectedCalendarDate by remember { mutableStateOf<String?>(null) }
     var showMoreMenu by remember { mutableStateOf(false) }
+    var showEditProfileDialog by remember { mutableStateOf(false) }
+
+    val loadedAvatarBitmap = remember(currentUser.photoUri) {
+        currentUser.photoUri?.let { uriStr ->
+            com.example.ui.components.loadBitmapFromPathOrUri(context, uriStr)
+        }
+    }
 
     val displayedTasks = remember(tasks, allTasks, selectedCalendarDate) {
         if (selectedCalendarDate != null) {
@@ -125,8 +144,8 @@ fun StudentDashboardScreen(
         }
     }
 
-    val completedCount = allTasks.count { it.isCompletedByCurrentUser }
-    val totalCount = allTasks.size
+    val completedCount = remember(allTasks) { allTasks.count { it.isCompletedByCurrentUser } }
+    val totalCount = remember(allTasks) { allTasks.size }
 
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
@@ -148,41 +167,72 @@ fun StudentDashboardScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    // Profile Avatar & Info
+                    // Profile Avatar & Info (Clickable to edit profile)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable { showEditProfileDialog = true }
+                            .padding(4.dp)
+                            .testTag("header_profile_clickable")
                     ) {
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
                                 .size(48.dp)
                                 .clip(CircleShape)
-                                .background(Brush.linearGradient(colors.primaryGradient))
+                                .background(
+                                    try {
+                                        Color(android.graphics.Color.parseColor(currentUser.avatarColorHex))
+                                    } catch (_: Exception) {
+                                        colors.primary
+                                    }
+                                )
                                 .testTag("profile_avatar")
                         ) {
-                            Text(
-                                text = currentUser.name.take(1),
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp
-                            )
+                            if (loadedAvatarBitmap != null) {
+                                Image(
+                                    bitmap = loadedAvatarBitmap,
+                                    contentDescription = "Profile Picture",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Text(
+                                    text = currentUser.name.take(1).uppercase(),
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 18.sp
+                                )
+                            }
                         }
 
                         Spacer(modifier = Modifier.width(12.dp))
 
                         Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "hey ${currentUser.name.lowercase()} ✨",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = colors.textPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Edit Profile",
+                                    tint = colors.textTertiary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
                             Text(
-                                text = "hey ${currentUser.name.lowercase()} ✨",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = colors.textPrimary,
+                                text = currentUser.schoolOrGrade?.ifEmpty { null } ?: "$todayFormatted ✨",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.textSecondary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = "$todayFormatted ✨",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = colors.textSecondary
                             )
                         }
                     }
@@ -231,6 +281,30 @@ fun StudentDashboardScreen(
                                     .border(1.dp, colors.border, RoundedCornerShape(14.dp))
                                     .testTag("three_dot_dropdown_menu")
                             ) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.Person,
+                                                contentDescription = null,
+                                                tint = colors.primary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Text(
+                                                text = "Edit Profile 👤",
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = colors.textPrimary
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        showEditProfileDialog = true
+                                    },
+                                    modifier = Modifier.testTag("menu_item_edit_profile")
+                                )
+
                                 DropdownMenuItem(
                                     text = {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -296,37 +370,6 @@ fun StudentDashboardScreen(
                                         onToggleDarkTheme()
                                     },
                                     modifier = Modifier.testTag("menu_item_toggle_dark")
-                                )
-
-                                DropdownMenuItem(
-                                    text = {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = Icons.Default.NotificationsActive,
-                                                contentDescription = null,
-                                                tint = colors.primary,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(10.dp))
-                                            Text(
-                                                text = "Send Due Today Alert 🔔",
-                                                fontWeight = FontWeight.Bold,
-                                                color = colors.textPrimary
-                                            )
-                                        }
-                                    },
-                                    onClick = {
-                                        showMoreMenu = false
-                                        val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-                                        val dueToday = allTasks.filter { it.task.dueDate == todayStr && !it.isCompletedByCurrentUser }
-                                        if (dueToday.isNotEmpty()) {
-                                            TaskNotificationHelper.sendDueTodayNotification(context, dueToday)
-                                            Toast.makeText(context, "🔔 Local notification sent for ${dueToday.size} due task(s)!", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            Toast.makeText(context, "✨ No pending tasks due today!", Toast.LENGTH_SHORT).show()
-                                        }
-                                    },
-                                    modifier = Modifier.testTag("menu_item_send_alert")
                                 )
 
                                 DropdownMenuItem(
@@ -644,6 +687,16 @@ fun StudentDashboardScreen(
                 )
             }
         }
+    }
+
+    if (showEditProfileDialog) {
+        EditProfileDialog(
+            currentUser = currentUser,
+            onDismiss = { showEditProfileDialog = false },
+            onSaveProfile = { name, photoUri, dateOfBirth, bio, schoolOrGrade, avatarColorHex ->
+                onSaveProfile(name, photoUri, dateOfBirth, bio, schoolOrGrade, avatarColorHex)
+            }
+        )
     }
 }
 }

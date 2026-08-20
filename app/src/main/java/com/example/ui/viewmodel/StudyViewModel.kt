@@ -88,21 +88,7 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
         lastActiveDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
     )
 
-    private val _currentUser = MutableStateFlow<UserEntity?>(
-        authService.currentFirebaseUser?.let { firebaseUser ->
-            UserEntity(
-                id = firebaseUser.uid,
-                name = firebaseUser.displayName?.ifBlank { null }
-                    ?: firebaseUser.email?.substringBefore("@")?.replaceFirstChar { it.uppercase() }
-                    ?: "Student",
-                email = firebaseUser.email.orEmpty(),
-                role = UserRole.STUDENT,
-                avatarColorHex = "#8B5CF6",
-                streakDays = 0,
-                lastActiveDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-            )
-        }
-    )
+    private val _currentUser = MutableStateFlow<UserEntity?>(defaultStudentUser)
     val currentUser: StateFlow<UserEntity?> = _currentUser.asStateFlow()
 
     // --- Authentication & User State ---
@@ -113,25 +99,47 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
-        // Start real-time Firestore sync & seed initial BCS data if database is empty
-        viewModelScope.launch {
-            repository.startFirestoreSync(viewModelScope)
-            repository.seedInitialBcsDataIfEmpty()
-
-            val activeUser = _currentUser.value ?: defaultStudentUser
-            repository.insertUser(activeUser)
-        }
-
-        // Restore saved student session if available in SharedPreferences
-        viewModelScope.launch {
-            val savedUserId = prefs.getString("logged_in_user_id", null)
-            if (!savedUserId.isNullOrBlank()) {
-                repository.allUsers.collect { users ->
-                    val savedUser = users.find { it.id == savedUserId }
+        // Asynchronously restore saved user session & start Firestore sync on Dispatchers.IO
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val savedUserId = prefs.getString("logged_in_user_id", null)
+                if (!savedUserId.isNullOrBlank()) {
+                    val savedUser = db.studyDao().getUserByIdDirect(savedUserId)
                     if (savedUser != null) {
                         _currentUser.value = savedUser
                     }
+                } else {
+                    val firebaseUser = authService.currentFirebaseUser
+                    if (firebaseUser != null) {
+                        val fbUser = UserEntity(
+                            id = firebaseUser.uid,
+                            name = firebaseUser.displayName?.ifBlank { null }
+                                ?: firebaseUser.email?.substringBefore("@")?.replaceFirstChar { it.uppercase() }
+                                ?: "Student",
+                            email = firebaseUser.email.orEmpty(),
+                            role = UserRole.STUDENT,
+                            avatarColorHex = "#8B5CF6",
+                            streakDays = 0,
+                            lastActiveDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                        )
+                        _currentUser.value = fbUser
+                    }
                 }
+            } catch (e: Exception) {
+                // Ignore any auth check failure on cold start
+            }
+
+            try {
+                repository.startFirestoreSync(viewModelScope)
+            } catch (e: Exception) {
+                // Ignore sync errors on cold start
+            }
+
+            val activeUser = _currentUser.value ?: defaultStudentUser
+            try {
+                repository.insertUser(activeUser)
+            } catch (e: Exception) {
+                // Ignore
             }
         }
     }
@@ -209,6 +217,33 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
             prefs.edit().putString("logged_in_user_id", demoUser.id).apply()
             _isAuthLoading.value = false
             _eventFlow.emit(UiEvent.ShowToast("Signed in as Demo Student! ✨"))
+        }
+    }
+
+    /**
+     * Update current user's profile details
+     */
+    fun updateUserProfile(
+        newName: String,
+        photoUri: String?,
+        dateOfBirth: String?,
+        bio: String?,
+        schoolOrGrade: String?,
+        avatarColorHex: String
+    ) {
+        viewModelScope.launch {
+            val user = _currentUser.value ?: return@launch
+            val updatedUser = user.copy(
+                name = newName.trim().ifEmpty { user.name },
+                photoUri = photoUri,
+                dateOfBirth = dateOfBirth?.trim()?.ifEmpty { null },
+                bio = bio?.trim()?.ifEmpty { null },
+                schoolOrGrade = schoolOrGrade?.trim()?.ifEmpty { null },
+                avatarColorHex = avatarColorHex
+            )
+            repository.insertUser(updatedUser)
+            _currentUser.value = updatedUser
+            _eventFlow.emit(UiEvent.ShowToast("Profile updated successfully! ✨"))
         }
     }
 

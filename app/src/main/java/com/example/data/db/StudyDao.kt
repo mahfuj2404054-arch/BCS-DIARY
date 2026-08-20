@@ -22,6 +22,9 @@ interface StudyDao {
     @Query("SELECT * FROM users WHERE id = :userId")
     fun getUserById(userId: String): Flow<UserEntity?>
 
+    @Query("SELECT * FROM users WHERE id = :userId")
+    suspend fun getUserByIdDirect(userId: String): UserEntity?
+
     @Query("SELECT * FROM users WHERE role = 'STUDENT'")
     fun getStudents(): Flow<List<UserEntity>>
 
