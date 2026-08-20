@@ -2,6 +2,9 @@ package com.example.data.firebase
 
 import android.content.Context
 import android.util.Log
+import com.example.data.model.ExamAttemptEntity
+import com.example.data.model.ExamEntity
+import com.example.data.model.QuestionEntity
 import com.example.data.model.RepeatSchedule
 import com.example.data.model.SubjectEntity
 import com.example.data.model.TaskCompletionEntity
@@ -505,6 +508,373 @@ class FirestoreSyncService(private val context: Context) {
         }
     }
 
+    // ==========================================
+    // EXAMS
+    // ==========================================
+
+    suspend fun saveExam(exam: ExamEntity) {
+        val db = firestore ?: return
+        try {
+            val examMap = hashMapOf(
+                "id" to exam.id,
+                "title" to exam.title,
+                "description" to exam.description,
+                "isPublished" to exam.isPublished,
+                "createdAt" to exam.createdAt
+            )
+            db.collection("exams").document(exam.id).set(examMap, SetOptions.merge()).awaitTask()
+            Log.d(tag, "Exam saved to Firestore: ${exam.title}")
+        } catch (e: Exception) {
+            Log.w(tag, "Failed to save exam to Firestore: ${e.message}")
+        }
+    }
+
+    suspend fun deleteExam(examId: String) {
+        val db = firestore ?: return
+        try {
+            db.collection("exams").document(examId).delete().awaitTask()
+            Log.d(tag, "Exam deleted from Firestore: $examId")
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to delete exam from Firestore: ${e.message}", e)
+        }
+    }
+
+    fun observeExams(onExamsChanged: (List<ExamEntity>, List<QuestionEntity>) -> Unit): ListenerRegistration? {
+        val db = firestore ?: return null
+        return try {
+            db.collection("exams").addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    if (error.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                        Log.w(tag, "Firestore exams permission restricted (using local Room database)")
+                    } else {
+                        Log.e(tag, "Listen failed for exams: ${error.message}")
+                    }
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    val exams = mutableListOf<ExamEntity>()
+                    val embeddedQuestions = mutableListOf<QuestionEntity>()
+
+                    for (doc in snapshot.documents) {
+                        try {
+                            val id = doc.getString("id") ?: doc.id
+                            val title = doc.getString("title")
+                                ?: doc.getString("name")
+                                ?: doc.getString("examTitle")
+                                ?: doc.getString("exam_title")
+                                ?: doc.getString("heading")
+                                ?: "Exam"
+                            val description = doc.getString("description")
+                                ?: doc.getString("details")
+                                ?: doc.getString("desc")
+                                ?: doc.getString("subtitle")
+                                ?: ""
+
+                            val isPublished = when {
+                                doc.contains("isPublished") -> doc.getBoolean("isPublished") ?: (doc.getString("isPublished")?.toBooleanStrictOrNull() ?: true)
+                                doc.contains("published") -> doc.getBoolean("published") ?: (doc.getString("published")?.toBooleanStrictOrNull() ?: true)
+                                doc.contains("is_published") -> doc.getBoolean("is_published") ?: (doc.getString("is_published")?.toBooleanStrictOrNull() ?: true)
+                                doc.contains("status") -> doc.getString("status")?.equals("published", ignoreCase = true) ?: true
+                                doc.contains("active") -> doc.getBoolean("active") ?: true
+                                doc.contains("isActive") -> doc.getBoolean("isActive") ?: true
+                                else -> true
+                            }
+
+                            val createdAt = doc.getLong("createdAt")
+                                ?: doc.getLong("created_at")
+                                ?: doc.getLong("timestamp")
+                                ?: System.currentTimeMillis()
+
+                            val exam = ExamEntity(
+                                id = id,
+                                title = title,
+                                description = description,
+                                isPublished = isPublished,
+                                createdAt = createdAt
+                            )
+                            exams.add(exam)
+
+                            // Check if questions are embedded as a list in the exam doc
+                            val rawQuestions = doc.get("questions") as? List<*> ?: doc.get("questionList") as? List<*>
+                            if (rawQuestions != null) {
+                                for (item in rawQuestions) {
+                                    if (item is Map<*, *>) {
+                                        val q = parseQuestionMap(item, id)
+                                        if (q != null) embeddedQuestions.add(q)
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e(tag, "Error parsing exam doc ${doc.id}: ${e.message}")
+                        }
+                    }
+                    Log.d(tag, "Firestore parsed ${exams.size} exams and ${embeddedQuestions.size} embedded questions")
+                    onExamsChanged(exams, embeddedQuestions)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to attach exams listener: ${e.message}")
+            null
+        }
+    }
+
+    // ==========================================
+    // QUESTIONS
+    // ==========================================
+
+    private fun parseQuestionMap(map: Map<*, *>, fallbackExamId: String = ""): QuestionEntity? {
+        try {
+            val qId = (map["id"] ?: map["_id"] ?: java.util.UUID.randomUUID().toString()).toString()
+            val examId = (map["examId"] ?: map["exam_id"] ?: map["testId"] ?: fallbackExamId).toString()
+            val text = (map["text"] ?: map["question"] ?: map["questionText"] ?: map["title"] ?: map["prompt"] ?: "").toString()
+            if (text.isBlank()) return null
+
+            var optA = ""
+            var optB = ""
+            var optC = ""
+            var optD = ""
+
+            val optionsList = map["options"] as? List<*>
+            if (optionsList != null && optionsList.isNotEmpty()) {
+                optA = optionsList.getOrNull(0)?.toString() ?: ""
+                optB = optionsList.getOrNull(1)?.toString() ?: ""
+                optC = optionsList.getOrNull(2)?.toString() ?: ""
+                optD = optionsList.getOrNull(3)?.toString() ?: ""
+            } else {
+                optA = (map["optionA"] ?: map["option_a"] ?: map["optA"] ?: map["a"] ?: map["option1"] ?: "").toString()
+                optB = (map["optionB"] ?: map["option_b"] ?: map["optB"] ?: map["b"] ?: map["option2"] ?: "").toString()
+                optC = (map["optionC"] ?: map["option_c"] ?: map["optC"] ?: map["c"] ?: map["option3"] ?: "").toString()
+                optD = (map["optionD"] ?: map["option_d"] ?: map["optD"] ?: map["d"] ?: map["option4"] ?: "").toString()
+            }
+
+            val rawCorrect = (map["correctOption"]
+                ?: map["correct_option"]
+                ?: map["answer"]
+                ?: map["correctAnswer"]
+                ?: map["correct"]
+                ?: map["correctAnswerIndex"]
+                ?: "A").toString().trim()
+
+            val correctOption = when {
+                rawCorrect.equals("0", ignoreCase = true) || rawCorrect.equals("A", ignoreCase = true) -> "A"
+                rawCorrect.equals("1", ignoreCase = true) || rawCorrect.equals("B", ignoreCase = true) -> "B"
+                rawCorrect.equals("2", ignoreCase = true) || rawCorrect.equals("C", ignoreCase = true) -> "C"
+                rawCorrect.equals("3", ignoreCase = true) || rawCorrect.equals("D", ignoreCase = true) -> "D"
+                optA.isNotBlank() && rawCorrect.equals(optA, ignoreCase = true) -> "A"
+                optB.isNotBlank() && rawCorrect.equals(optB, ignoreCase = true) -> "B"
+                optC.isNotBlank() && rawCorrect.equals(optC, ignoreCase = true) -> "C"
+                optD.isNotBlank() && rawCorrect.equals(optD, ignoreCase = true) -> "D"
+                rawCorrect.uppercase().startsWith("A") -> "A"
+                rawCorrect.uppercase().startsWith("B") -> "B"
+                rawCorrect.uppercase().startsWith("C") -> "C"
+                rawCorrect.uppercase().startsWith("D") -> "D"
+                else -> "A"
+            }
+
+            val timeLimit = (map["timeLimitSeconds"] ?: map["timeLimit"] ?: map["timer"] ?: map["duration"] ?: 30).toString().toIntOrNull() ?: 30
+
+            return QuestionEntity(
+                id = qId,
+                examId = examId,
+                text = text,
+                optionA = optA,
+                optionB = optB,
+                optionC = optC,
+                optionD = optD,
+                correctOption = correctOption,
+                timeLimitSeconds = timeLimit
+            )
+        } catch (e: Exception) {
+            Log.e(tag, "Error parsing question map: ${e.message}")
+            return null
+        }
+    }
+
+    suspend fun saveQuestions(questions: List<QuestionEntity>) {
+        val db = firestore ?: return
+        try {
+            for (q in questions) {
+                val qMap = hashMapOf(
+                    "id" to q.id,
+                    "examId" to q.examId,
+                    "text" to q.text,
+                    "optionA" to q.optionA,
+                    "optionB" to q.optionB,
+                    "optionC" to q.optionC,
+                    "optionD" to q.optionD,
+                    "correctOption" to q.correctOption,
+                    "timeLimitSeconds" to q.timeLimitSeconds
+                )
+                db.collection("questions").document(q.id).set(qMap, SetOptions.merge()).awaitTask()
+            }
+            Log.d(tag, "Saved ${questions.size} questions to Firestore")
+        } catch (e: Exception) {
+            Log.w(tag, "Failed to save questions to Firestore: ${e.message}")
+        }
+    }
+
+    fun observeQuestions(onQuestionsChanged: (List<QuestionEntity>) -> Unit): ListenerRegistration? {
+        val db = firestore ?: return null
+        return try {
+            db.collection("questions").addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    if (error.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                        Log.w(tag, "Firestore questions permission restricted")
+                    } else {
+                        Log.e(tag, "Listen failed for questions: ${error.message}")
+                    }
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    val questions = snapshot.documents.mapNotNull { doc ->
+                        try {
+                            val data = doc.data ?: return@mapNotNull null
+                            parseQuestionMap(data, "")
+                        } catch (e: Exception) {
+                            Log.e(tag, "Error parsing question doc ${doc.id}: ${e.message}")
+                            null
+                        }
+                    }
+                    Log.d(tag, "Firestore parsed ${questions.size} top-level questions")
+                    onQuestionsChanged(questions)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to attach questions listener: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun fetchQuestionsForExam(examId: String): List<QuestionEntity> {
+        val db = firestore ?: return emptyList()
+        val results = mutableListOf<QuestionEntity>()
+
+        // 1. Check top-level collection "questions" with examId
+        try {
+            val qSnap = db.collection("questions").whereEqualTo("examId", examId).get().awaitTask()
+            for (doc in qSnap.documents) {
+                val data = doc.data ?: continue
+                val q = parseQuestionMap(data, examId)
+                if (q != null) results.add(q)
+            }
+        } catch (e: Exception) {
+            Log.d(tag, "Query questions by examId: ${e.message}")
+        }
+
+        // 2. Check top-level collection "questions" with exam_id
+        if (results.isEmpty()) {
+            try {
+                val qSnap = db.collection("questions").whereEqualTo("exam_id", examId).get().awaitTask()
+                for (doc in qSnap.documents) {
+                    val data = doc.data ?: continue
+                    val q = parseQuestionMap(data, examId)
+                    if (q != null) results.add(q)
+                }
+            } catch (e: Exception) {
+                Log.d(tag, "Query questions by exam_id: ${e.message}")
+            }
+        }
+
+        // 3. Check subcollection exams/{examId}/questions
+        try {
+            val subSnap = db.collection("exams").document(examId).collection("questions").get().awaitTask()
+            for (doc in subSnap.documents) {
+                val data = doc.data ?: continue
+                val q = parseQuestionMap(data, examId)
+                if (q != null) results.add(q)
+            }
+        } catch (e: Exception) {
+            Log.d(tag, "Query subcollection exams/$examId/questions: ${e.message}")
+        }
+
+        // 4. Check exam document for embedded questions array
+        if (results.isEmpty()) {
+            try {
+                val examDoc = db.collection("exams").document(examId).get().awaitTask()
+                if (examDoc.exists()) {
+                    val rawQuestions = examDoc.get("questions") as? List<*> ?: examDoc.get("questionList") as? List<*>
+                    if (rawQuestions != null) {
+                        for (item in rawQuestions) {
+                            if (item is Map<*, *>) {
+                                val q = parseQuestionMap(item, examId)
+                                if (q != null) results.add(q)
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.d(tag, "Query examDoc for embedded questions: ${e.message}")
+            }
+        }
+
+        return results.distinctBy { it.id }
+    }
+
+    // ==========================================
+    // EXAM ATTEMPTS
+    // ==========================================
+
+    suspend fun saveExamAttempt(attempt: ExamAttemptEntity) {
+        val db = firestore ?: return
+        try {
+            val attemptMap = hashMapOf(
+                "id" to attempt.id,
+                "userId" to attempt.userId,
+                "examId" to attempt.examId,
+                "score" to attempt.score,
+                "correctCount" to attempt.correctCount,
+                "wrongCount" to attempt.wrongCount,
+                "skippedCount" to attempt.skippedCount,
+                "totalTimeSeconds" to attempt.totalTimeSeconds,
+                "completedAt" to attempt.completedAt
+            )
+            db.collection("exam_attempts").document(attempt.id).set(attemptMap, SetOptions.merge()).awaitTask()
+            Log.d(tag, "Exam attempt saved to Firestore: ${attempt.id}")
+        } catch (e: Exception) {
+            Log.w(tag, "Failed to save exam attempt to Firestore: ${e.message}")
+        }
+    }
+
+    fun observeExamAttempts(onAttemptsChanged: (List<ExamAttemptEntity>) -> Unit): ListenerRegistration? {
+        val db = firestore ?: return null
+        return try {
+            db.collection("exam_attempts").addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    if (error.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                        Log.w(tag, "Firestore exam_attempts permission restricted")
+                    } else {
+                        Log.e(tag, "Listen failed for exam_attempts: ${error.message}")
+                    }
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    val attempts = snapshot.documents.mapNotNull { doc ->
+                        try {
+                            ExamAttemptEntity(
+                                id = doc.getString("id") ?: doc.id,
+                                userId = doc.getString("userId") ?: doc.getString("user_id") ?: "",
+                                examId = doc.getString("examId") ?: doc.getString("exam_id") ?: "",
+                                score = doc.getLong("score")?.toInt() ?: 0,
+                                correctCount = doc.getLong("correctCount")?.toInt() ?: doc.getLong("correct_count")?.toInt() ?: 0,
+                                wrongCount = doc.getLong("wrongCount")?.toInt() ?: doc.getLong("wrong_count")?.toInt() ?: 0,
+                                skippedCount = doc.getLong("skippedCount")?.toInt() ?: doc.getLong("skipped_count")?.toInt() ?: 0,
+                                totalTimeSeconds = doc.getLong("totalTimeSeconds")?.toInt() ?: doc.getLong("total_time_seconds")?.toInt() ?: 0,
+                                completedAt = doc.getLong("completedAt") ?: doc.getLong("completed_at") ?: System.currentTimeMillis()
+                            )
+                        } catch (e: Exception) {
+                            Log.e(tag, "Error parsing exam attempt doc: ${e.message}")
+                            null
+                        }
+                    }
+                    onAttemptsChanged(attempts)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to attach exam attempts listener: ${e.message}")
+            null
+        }
+    }
+
     suspend fun clearAllFirestoreData() {
         val db = firestore ?: return
         try {
@@ -523,6 +893,14 @@ class FirestoreSyncService(private val context: Context) {
             val completions = db.collection("task_completions").get().awaitTask()
             for (doc in completions.documents) {
                 db.collection("task_completions").document(doc.id).delete().awaitTask()
+            }
+            val exams = db.collection("exams").get().awaitTask()
+            for (doc in exams.documents) {
+                db.collection("exams").document(doc.id).delete().awaitTask()
+            }
+            val questions = db.collection("questions").get().awaitTask()
+            for (doc in questions.documents) {
+                db.collection("questions").document(doc.id).delete().awaitTask()
             }
             Log.d(tag, "Cleared all data from Firestore")
         } catch (e: Exception) {

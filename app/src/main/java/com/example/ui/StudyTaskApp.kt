@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.AutoGraph
 import androidx.compose.material.icons.filled.MenuBook
@@ -73,11 +75,16 @@ sealed class Screen {
     object Login : Screen()
     object StudentMain : Screen()
     data class TaskDetail(val taskId: String) : Screen()
+    object ExamList : Screen()
+    object ActiveExam : Screen()
+    object ExamResult : Screen()
+    object ProgressAnalytics : Screen()
 }
 
 @Composable
 fun StudyTaskApp(
     viewModel: StudyViewModel = viewModel(),
+    examViewModel: com.example.ui.viewmodel.ExamViewModel = viewModel(),
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -297,23 +304,23 @@ fun StudyTaskApp(
                             modifier = Modifier.testTag("nav_tab_subjects")
                         )
 
-                        // Tab 4: [Progress Analytics]
+                        // Tab 4: [Exams]
                         NavigationBarItem(
                             selected = pagerState.currentPage == 3,
                             onClick = {
                                 if (pagerState.currentPage != 3) {
                                     scope.launch { pagerState.scrollToPage(3) }
-                                    viewModel.setActiveTab(StudentTab.PROGRESS)
+                                    viewModel.setActiveTab(StudentTab.EXAMS)
                                 }
                             },
                             icon = {
                                 Icon(
-                                    imageVector = if (pagerState.currentPage == 3) Icons.Filled.AutoGraph else Icons.Outlined.AutoGraph,
-                                    contentDescription = "Progress",
+                                    imageVector = if (pagerState.currentPage == 3) Icons.Filled.EmojiEvents else Icons.Outlined.EmojiEvents,
+                                    contentDescription = "Exams",
                                     modifier = Modifier.size(22.dp)
                                 )
                             },
-                            label = { Text("Progress", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
+                            label = { Text("Exams", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = colors.primary,
                                 selectedTextColor = colors.primary,
@@ -321,7 +328,7 @@ fun StudyTaskApp(
                                 unselectedTextColor = colors.textSecondary,
                                 indicatorColor = colors.pillBg
                             ),
-                            modifier = Modifier.testTag("nav_tab_progress")
+                            modifier = Modifier.testTag("nav_tab_exams")
                         )
                     }
                 }
@@ -381,6 +388,8 @@ fun StudyTaskApp(
                                                 onToggleDarkTheme = onToggleDarkTheme,
                                                 onOpenThemePicker = onOpenThemePicker,
                                                 onOpenLeaderboard = onOpenLeaderboard,
+                                                onOpenProgress = { currentScreen = Screen.ProgressAnalytics },
+                                                onOpenExams = { currentScreen = Screen.ExamList },
                                                 onSaveProfile = onSaveProfile
                                             )
                                         }
@@ -400,13 +409,13 @@ fun StudyTaskApp(
                                         }
 
                                         3 -> {
-                                            ProgressDashboardScreen(
-                                                currentUser = user,
-                                                tasksWithDetails = tasksWithDetails,
-                                                subjectsWithStats = subjectsWithStats,
-                                                userCompletions = allCompletionLogs,
-                                                isDarkTheme = effectiveDarkTheme,
-                                                onToggleDarkTheme = onToggleDarkTheme
+                                            com.example.ui.screens.ExamListScreen(
+                                                examViewModel = examViewModel,
+                                                onNavigateBack = { },
+                                                onStartExam = {
+                                                    currentScreen = Screen.ActiveExam
+                                                },
+                                                isTab = true
                                             )
                                         }
                                     }
@@ -425,6 +434,54 @@ fun StudyTaskApp(
                                     if (task != null) {
                                         viewModel.toggleTaskCompletion(task, note)
                                     }
+                                }
+                            )
+                        }
+
+                        is Screen.ProgressAnalytics -> {
+                            val user = currentUser
+                            if (user != null) {
+                                ProgressDashboardScreen(
+                                    currentUser = user,
+                                    tasksWithDetails = tasksWithDetails,
+                                    subjectsWithStats = subjectsWithStats,
+                                    userCompletions = allCompletionLogs,
+                                    isDarkTheme = effectiveDarkTheme,
+                                    onToggleDarkTheme = onToggleDarkTheme,
+                                    onBack = { currentScreen = Screen.StudentMain }
+                                )
+                            }
+                        }
+
+                        is Screen.ExamList -> {
+                            com.example.ui.screens.ExamListScreen(
+                                examViewModel = examViewModel,
+                                onNavigateBack = {
+                                    currentScreen = Screen.StudentMain
+                                },
+                                onStartExam = {
+                                    currentScreen = Screen.ActiveExam
+                                }
+                            )
+                        }
+
+                        is Screen.ActiveExam -> {
+                            com.example.ui.screens.ActiveExamScreen(
+                                examViewModel = examViewModel,
+                                onExamFinished = {
+                                    currentScreen = Screen.ExamResult
+                                },
+                                onExamQuit = {
+                                    currentScreen = Screen.ExamList
+                                }
+                            )
+                        }
+
+                        is Screen.ExamResult -> {
+                            com.example.ui.screens.ExamResultScreen(
+                                examViewModel = examViewModel,
+                                onFinish = {
+                                    currentScreen = Screen.StudentMain
                                 }
                             )
                         }

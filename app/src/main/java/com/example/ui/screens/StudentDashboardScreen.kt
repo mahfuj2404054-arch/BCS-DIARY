@@ -33,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.AutoGraph
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Edit
@@ -116,6 +117,8 @@ fun StudentDashboardScreen(
     onToggleDarkTheme: () -> Unit = {},
     onOpenThemePicker: () -> Unit = {},
     onOpenLeaderboard: () -> Unit = {},
+    onOpenProgress: () -> Unit = {},
+    onOpenExams: () -> Unit = {},
     onSaveProfile: (name: String, photoUri: String?, dateOfBirth: String?, bio: String?, schoolOrGrade: String?, avatarColorHex: String) -> Unit = { _, _, _, _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
@@ -281,6 +284,30 @@ fun StudentDashboardScreen(
                                     .border(1.dp, colors.border, RoundedCornerShape(14.dp))
                                     .testTag("three_dot_dropdown_menu")
                             ) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.AutoGraph,
+                                                contentDescription = null,
+                                                tint = colors.primary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Text(
+                                                text = "Progress Analytics 📈",
+                                                fontWeight = FontWeight.Bold,
+                                                color = colors.textPrimary
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        showMoreMenu = false
+                                        onOpenProgress()
+                                    },
+                                    modifier = Modifier.testTag("menu_item_progress")
+                                )
+
                                 DropdownMenuItem(
                                     text = {
                                         Row(verticalAlignment = Alignment.CenterVertically) {

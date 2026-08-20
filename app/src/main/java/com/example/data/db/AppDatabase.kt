@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import com.example.data.model.ExamEntity
+import com.example.data.model.QuestionEntity
+import com.example.data.model.ExamAttemptEntity
 import com.example.data.model.SubjectEntity
 import com.example.data.model.TaskCompletionEntity
 import com.example.data.model.TaskEntity
@@ -16,9 +19,12 @@ import com.example.data.model.UserEntity
         SubjectEntity::class,
         TopicEntity::class,
         TaskEntity::class,
-        TaskCompletionEntity::class
+        TaskCompletionEntity::class,
+        ExamEntity::class,
+        QuestionEntity::class,
+        ExamAttemptEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

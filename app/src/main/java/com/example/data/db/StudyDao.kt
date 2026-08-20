@@ -174,4 +174,71 @@ interface StudyDao {
 
     @Query("SELECT COUNT(*) FROM subjects")
     suspend fun getSubjectCount(): Int
+
+    // --- Exams ---
+    @Query("SELECT * FROM exams ORDER BY createdAt DESC")
+    fun getAllExams(): Flow<List<com.example.data.model.ExamEntity>>
+
+    @Query("SELECT * FROM exams WHERE isPublished = 1 ORDER BY createdAt DESC")
+    fun getPublishedExams(): Flow<List<com.example.data.model.ExamEntity>>
+
+    @Query("SELECT * FROM exams WHERE id = :id")
+    suspend fun getExamById(id: String): com.example.data.model.ExamEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertExam(exam: com.example.data.model.ExamEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertExams(exams: List<com.example.data.model.ExamEntity>)
+
+    @Query("DELETE FROM exams")
+    suspend fun deleteAllExams()
+
+    @androidx.room.Transaction
+    suspend fun syncExamsTransaction(exams: List<com.example.data.model.ExamEntity>) {
+        if (exams.isNotEmpty()) {
+            deleteAllExams()
+            insertExams(exams)
+        }
+    }
+
+    // --- Questions ---
+    @Query("SELECT * FROM questions WHERE examId = :examId")
+    fun getQuestionsForExam(examId: String): Flow<List<com.example.data.model.QuestionEntity>>
+
+    @Query("SELECT * FROM questions WHERE examId = :examId")
+    suspend fun getQuestionsForExamDirect(examId: String): List<com.example.data.model.QuestionEntity>
+
+    @Query("SELECT COUNT(*) FROM questions WHERE examId = :examId")
+    fun getQuestionCountForExam(examId: String): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM questions WHERE examId = :examId")
+    suspend fun getQuestionCountForExamDirect(examId: String): Int
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertQuestions(questions: List<com.example.data.model.QuestionEntity>)
+
+    @Query("DELETE FROM questions WHERE examId = :examId")
+    suspend fun deleteQuestionsForExam(examId: String)
+
+    @Query("DELETE FROM questions")
+    suspend fun deleteAllQuestions()
+
+    @androidx.room.Transaction
+    suspend fun syncQuestionsTransaction(questions: List<com.example.data.model.QuestionEntity>) {
+        if (questions.isNotEmpty()) {
+            deleteAllQuestions()
+            insertQuestions(questions)
+        }
+    }
+
+    // --- Exam Attempts ---
+    @Query("SELECT * FROM exam_attempts WHERE userId = :userId ORDER BY completedAt DESC")
+    fun getExamAttemptsForUser(userId: String): Flow<List<com.example.data.model.ExamAttemptEntity>>
+
+    @Query("SELECT * FROM exam_attempts WHERE examId = :examId ORDER BY score DESC, totalTimeSeconds ASC")
+    fun getExamLeaderboard(examId: String): Flow<List<com.example.data.model.ExamAttemptEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertExamAttempt(attempt: com.example.data.model.ExamAttemptEntity)
 }

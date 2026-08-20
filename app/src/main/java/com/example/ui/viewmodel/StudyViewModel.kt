@@ -51,7 +51,7 @@ enum class StudentTab {
     TASKS,
     TOPICS,
     SUBJECTS,
-    PROGRESS
+    EXAMS
 }
 
 enum class TaskFilter {

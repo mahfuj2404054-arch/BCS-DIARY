@@ -16,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -33,6 +34,9 @@ class StudyRepository(
     private var subjectsListener: ListenerRegistration? = null
     private var topicsListener: ListenerRegistration? = null
     private var completionsListener: ListenerRegistration? = null
+    private var examsListener: ListenerRegistration? = null
+    private var questionsListener: ListenerRegistration? = null
+    private var attemptsListener: ListenerRegistration? = null
 
     val allUsers: Flow<List<UserEntity>> = studyDao.getAllUsers()
     val allStudents: Flow<List<UserEntity>> = studyDao.getStudents()
@@ -40,6 +44,31 @@ class StudyRepository(
     val allTopics: Flow<List<TopicEntity>> = studyDao.getAllTopics()
     val allTasks: Flow<List<TaskEntity>> = studyDao.getAllTasks()
     val allCompletionLogs: Flow<List<TaskCompletionEntity>> = studyDao.getAllCompletionLogs()
+    
+    val allPublishedExams: Flow<List<com.example.data.model.ExamEntity>> = studyDao.getPublishedExams()
+    val allExams: Flow<List<com.example.data.model.ExamEntity>> = studyDao.getAllExams()
+    fun getQuestionsForExam(examId: String): Flow<List<com.example.data.model.QuestionEntity>> = studyDao.getQuestionsForExam(examId)
+    fun getQuestionCountForExam(examId: String): Flow<Int> = studyDao.getQuestionCountForExam(examId)
+
+    suspend fun getQuestionsForExamDirect(examId: String): List<com.example.data.model.QuestionEntity> {
+        val local = studyDao.getQuestionsForExamDirect(examId)
+        if (local.isNotEmpty()) return local
+
+        // If local is empty, try fetching live from Firestore
+        val remote = firestoreSync?.fetchQuestionsForExam(examId) ?: emptyList()
+        if (remote.isNotEmpty()) {
+            studyDao.insertQuestions(remote)
+            return remote
+        }
+        return emptyList()
+    }
+
+    fun getExamAttemptsForUser(userId: String): Flow<List<com.example.data.model.ExamAttemptEntity>> = studyDao.getExamAttemptsForUser(userId)
+    fun getExamLeaderboard(examId: String): Flow<List<com.example.data.model.ExamAttemptEntity>> = studyDao.getExamLeaderboard(examId)
+    suspend fun insertExamAttempt(attempt: com.example.data.model.ExamAttemptEntity) {
+        studyDao.insertExamAttempt(attempt)
+        firestoreSync?.saveExamAttempt(attempt)
+    }
 
     fun getUser(userId: String): Flow<UserEntity?> = studyDao.getUserById(userId)
 
@@ -94,6 +123,39 @@ class StudyRepository(
                 studyDao.syncCompletionsTransaction(firestoreCompletions)
             }
         }
+
+        // Synchronize exams & embedded questions
+        examsListener?.remove()
+        examsListener = fs.observeExams { firestoreExams, embeddedQuestions ->
+            scope.launch(Dispatchers.IO) {
+                if (firestoreExams.isNotEmpty()) {
+                    studyDao.syncExamsTransaction(firestoreExams)
+                }
+                if (embeddedQuestions.isNotEmpty()) {
+                    studyDao.insertQuestions(embeddedQuestions)
+                }
+            }
+        }
+
+        // Synchronize standalone questions
+        questionsListener?.remove()
+        questionsListener = fs.observeQuestions { firestoreQuestions ->
+            scope.launch(Dispatchers.IO) {
+                if (firestoreQuestions.isNotEmpty()) {
+                    studyDao.insertQuestions(firestoreQuestions)
+                }
+            }
+        }
+
+        // Synchronize exam attempts
+        attemptsListener?.remove()
+        attemptsListener = fs.observeExamAttempts { firestoreAttempts ->
+            scope.launch(Dispatchers.IO) {
+                for (attempt in firestoreAttempts) {
+                    studyDao.insertExamAttempt(attempt)
+                }
+            }
+        }
     }
 
     fun stopFirestoreSync() {
@@ -102,11 +164,17 @@ class StudyRepository(
         subjectsListener?.remove()
         topicsListener?.remove()
         completionsListener?.remove()
+        examsListener?.remove()
+        questionsListener?.remove()
+        attemptsListener?.remove()
         usersListener = null
         tasksListener = null
         subjectsListener = null
         topicsListener = null
         completionsListener = null
+        examsListener = null
+        questionsListener = null
+        attemptsListener = null
     }
 
     fun getTaskWithDetails(taskId: String, currentUserId: String): Flow<TaskWithDetails?> {
@@ -320,8 +388,56 @@ class StudyRepository(
         studyDao.deleteAllCompletions()
     }
 
+    suspend fun seedExamsIfEmpty() {
+        val exams = studyDao.getAllExams().firstOrNull()
+        if (exams.isNullOrEmpty()) {
+            val exam = com.example.data.model.ExamEntity(
+                id = "exam_mock_1",
+                title = "BCS Prelims Exam 1",
+                description = "Test your knowledge for the upcoming BCS Prelims.",
+                isPublished = true
+            )
+            studyDao.insertExam(exam)
+            
+            val questions = listOf(
+                com.example.data.model.QuestionEntity(
+                    examId = exam.id,
+                    text = "What is the capital of Bangladesh?",
+                    optionA = "Dhaka",
+                    optionB = "Chittagong",
+                    optionC = "Sylhet",
+                    optionD = "Rajshahi",
+                    correctOption = "A",
+                    timeLimitSeconds = 15
+                ),
+                com.example.data.model.QuestionEntity(
+                    examId = exam.id,
+                    text = "Who wrote the national anthem of Bangladesh?",
+                    optionA = "Kazi Nazrul Islam",
+                    optionB = "Rabindranath Tagore",
+                    optionC = "Jibanananda Das",
+                    optionD = "Jasimuddin",
+                    correctOption = "B",
+                    timeLimitSeconds = 15
+                ),
+                com.example.data.model.QuestionEntity(
+                    examId = exam.id,
+                    text = "Which river is the longest in Bangladesh?",
+                    optionA = "Padma",
+                    optionB = "Meghna",
+                    optionC = "Jamuna",
+                    optionD = "Surma",
+                    correctOption = "D",
+                    timeLimitSeconds = 20
+                )
+            )
+            studyDao.insertQuestions(questions)
+        }
+    }
+
     suspend fun seedInitialBcsDataIfEmpty() {
         // Pure Firestore / live user database mode — no mock or demo data seeded
         removeAllDemoData()
+        seedExamsIfEmpty()
     }
 }
