@@ -155,9 +155,7 @@ fun WeeklyCalendarView(
         colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
         elevation = CardDefaults.cardElevation(defaultElevation = if (colors.isDark) 0.dp else 2.dp),
         border = CardDefaults.outlinedCardBorder().copy(
-            brush = Brush.linearGradient(
-                listOf(colors.primary.copy(alpha = 0.45f), colors.secondary.copy(alpha = 0.45f))
-            )
+            brush = androidx.compose.ui.graphics.SolidColor(colors.primary.copy(alpha = 0.45f))
         ),
         modifier = modifier
             .fillMaxWidth()

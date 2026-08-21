@@ -326,12 +326,11 @@ fun ActiveExamScreen(
         AlertDialog(
             onDismissRequest = { showQuitDialog = false },
             title = { Text("Quit Exam?", color = colors.textPrimary) },
-            text = { Text("Are you sure you want to quit? Your progress will be lost and this will not be counted on the leaderboard.", color = colors.textSecondary) },
+            text = { Text("Are you sure you want to quit? Your current score will be recorded on the leaderboard as an early completion.", color = colors.textSecondary) },
             confirmButton = {
                 TextButton(onClick = {
                     showQuitDialog = false
                     examViewModel.quitExam()
-                    onExamQuit()
                 }) {
                     Text("Quit", color = Color(0xFFEF4444))
                 }
@@ -542,8 +541,10 @@ fun ActiveExamScreen(
 @Composable
 fun ExamResultScreen(
     examViewModel: ExamViewModel = viewModel(),
-    onFinish: () -> Unit
+    onFinish: () -> Unit,
+    onReviewAnswers: () -> Unit = {}
 ) {
+    val endedEarly by examViewModel.endedEarly.collectAsStateWithLifecycle()
     val score = examViewModel.examScore
     val correct = examViewModel.examCorrectCount
     val wrong = examViewModel.examWrongCount
@@ -581,12 +582,28 @@ fun ExamResultScreen(
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "Exam Complete!",
+            text = if (endedEarly) "Exam Ended Early!" else "Exam Complete!",
             style = MaterialTheme.typography.headlineLarge.copy(
                 fontWeight = FontWeight.Bold,
                 color = colors.textPrimary
             )
         )
+        
+        if (endedEarly) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFFFEF2F2),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFCA5A5))
+            ) {
+                Text(
+                    text = "Exam ended early — your current score has been recorded on the leaderboard.",
+                    style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFFDC2626)),
+                    modifier = Modifier.padding(16.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+        }
         
         Spacer(modifier = Modifier.height(32.dp))
         
@@ -635,6 +652,23 @@ fun ExamResultScreen(
         }
         
         Spacer(modifier = Modifier.height(64.dp))
+        
+        Button(
+            onClick = onReviewAnswers,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = colors.secondary)
+        ) {
+            Text(
+                text = "Review Answers",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
         
         Row(
             modifier = Modifier.fillMaxWidth(),

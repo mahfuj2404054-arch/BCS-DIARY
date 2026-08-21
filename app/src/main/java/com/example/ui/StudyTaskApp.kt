@@ -78,6 +78,7 @@ sealed class Screen {
     object ExamList : Screen()
     object ActiveExam : Screen()
     object ExamResult : Screen()
+    object ExamReview : Screen()
     object ProgressAnalytics : Screen()
 }
 
@@ -109,6 +110,7 @@ fun StudyTaskApp(
     val taskFilter by viewModel.taskFilter.collectAsStateWithLifecycle()
     val activeTab by viewModel.activeTab.collectAsStateWithLifecycle()
     val isAuthLoading by viewModel.isAuthLoading.collectAsStateWithLifecycle()
+    val isProfileLoading by viewModel.isProfileLoading.collectAsStateWithLifecycle()
     val authErrorMessage by viewModel.authErrorMessage.collectAsStateWithLifecycle()
     val celebrationState by viewModel.celebrationState.collectAsStateWithLifecycle()
     val isDarkThemeOverride by viewModel.isDarkTheme.collectAsStateWithLifecycle()
@@ -117,6 +119,10 @@ fun StudyTaskApp(
     val effectiveDarkTheme = isDarkThemeOverride ?: systemInDark
 
     val pagerState = rememberPagerState(initialPage = activeTab.ordinal) { 4 }
+
+    LaunchedEffect(currentUser?.id) {
+        examViewModel.setCurrentUserId(currentUser?.id)
+    }
 
     LaunchedEffect(activeTab) {
         if (pagerState.currentPage != activeTab.ordinal) {
@@ -340,11 +346,21 @@ fun StudyTaskApp(
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
-                AnimatedContent(
-                    targetState = currentScreen,
-                    transitionSpec = { fadeIn() togetherWith fadeOut() },
-                    label = "screenTransition"
-                ) { screen ->
+                if (isProfileLoading) {
+                    Box(
+                        modifier = Modifier.fillMaxSize().background(colors.background),
+                        contentAlignment = androidx.compose.ui.Alignment.Center
+                    ) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            color = colors.primary
+                        )
+                    }
+                } else {
+                    AnimatedContent(
+                        targetState = currentScreen,
+                        transitionSpec = { fadeIn() togetherWith fadeOut() },
+                        label = "screenTransition"
+                    ) { screen ->
                     when (screen) {
                         is Screen.Login -> {
                             AuthScreen(
@@ -482,11 +498,24 @@ fun StudyTaskApp(
                                 examViewModel = examViewModel,
                                 onFinish = {
                                     currentScreen = Screen.StudentMain
+                                },
+                                onReviewAnswers = {
+                                    currentScreen = Screen.ExamReview
+                                }
+                            )
+                        }
+                        
+                        is Screen.ExamReview -> {
+                            com.example.ui.screens.ExamReviewScreen(
+                                examViewModel = examViewModel,
+                                onBackToResults = {
+                                    currentScreen = Screen.ExamResult
                                 }
                             )
                         }
                     }
                 }
+                } // End of if (isProfileLoading) else
 
                 // Confetti & Streak Milestone Celebration Overlay
                 ConfettiCelebrationOverlay(

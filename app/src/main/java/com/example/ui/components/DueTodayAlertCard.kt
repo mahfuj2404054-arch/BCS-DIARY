@@ -97,25 +97,15 @@ fun DueTodayAlertCard(
     val isAllCompleted = pendingDueToday.isEmpty() && completedDueToday.isNotEmpty()
 
     val cardBgGradient = if (isAllCompleted) {
-        Brush.linearGradient(
-            listOf(
-                Color(0xFF10B981).copy(alpha = if (colors.isDark) 0.25f else 0.12f),
-                Color(0xFF059669).copy(alpha = if (colors.isDark) 0.20f else 0.08f)
-            )
-        )
+        androidx.compose.ui.graphics.SolidColor(Color(0xFF10B981).copy(alpha = if (colors.isDark) 0.25f else 0.12f))
     } else {
-        Brush.linearGradient(
-            listOf(
-                colors.primary.copy(alpha = if (colors.isDark) 0.28f else 0.15f),
-                Color(0xFFF59E0B).copy(alpha = if (colors.isDark) 0.22f else 0.12f)
-            )
-        )
+        androidx.compose.ui.graphics.SolidColor(colors.primary.copy(alpha = if (colors.isDark) 0.28f else 0.15f))
     }
 
     val borderBrush = if (isAllCompleted) {
-        Brush.linearGradient(listOf(Color(0xFF10B981), Color(0xFF34D399)))
+        androidx.compose.ui.graphics.SolidColor(Color(0xFF10B981))
     } else {
-        Brush.linearGradient(listOf(colors.primary, Color(0xFFF59E0B)))
+        androidx.compose.ui.graphics.SolidColor(colors.primary)
     }
 
     Card(
@@ -195,9 +185,7 @@ fun DueTodayAlertCard(
                                 shape = RoundedCornerShape(12.dp),
                                 color = colors.surface.copy(alpha = 0.7f),
                                 border = CardDefaults.outlinedCardBorder().copy(
-                                    brush = Brush.linearGradient(
-                                        listOf(colors.borderSubtle, colors.border)
-                                    )
+                                    brush = androidx.compose.ui.graphics.SolidColor(colors.borderSubtle)
                                 ),
                                 modifier = Modifier.fillMaxWidth()
                             ) {

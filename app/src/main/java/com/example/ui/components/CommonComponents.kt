@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -143,7 +144,7 @@ fun SubjectBadge(
         shape = RoundedCornerShape(10.dp),
         color = color.copy(alpha = if (colors.isDark) 0.22f else 0.12f),
         border = CardDefaults.outlinedCardBorder().copy(
-            brush = Brush.linearGradient(listOf(color.copy(alpha = 0.4f), color.copy(alpha = 0.4f)))
+            brush = androidx.compose.ui.graphics.SolidColor(color.copy(alpha = 0.4f))
         ),
         modifier = modifier
     ) {
@@ -167,7 +168,7 @@ fun TopicBadge(
         shape = RoundedCornerShape(10.dp),
         color = colors.pillBg,
         border = CardDefaults.outlinedCardBorder().copy(
-            brush = Brush.linearGradient(listOf(colors.border, colors.borderSubtle))
+            brush = androidx.compose.ui.graphics.SolidColor(colors.border)
         ),
         modifier = modifier
     ) {
@@ -273,7 +274,7 @@ fun GoogleDriveButton(
         shape = RoundedCornerShape(12.dp),
         color = colors.pillBg,
         border = CardDefaults.outlinedCardBorder().copy(
-            brush = Brush.linearGradient(listOf(colors.primary.copy(alpha = 0.4f), colors.secondary.copy(alpha = 0.4f)))
+            brush = androidx.compose.ui.graphics.SolidColor(colors.primary.copy(alpha = 0.4f))
         ),
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
@@ -334,18 +335,17 @@ fun TaskCard(
         label = "cardBg"
     )
 
+    val cardBorderBrush = remember(isCompleted, colors.border, colors.primary) {
+        androidx.compose.ui.graphics.SolidColor(
+            if (isCompleted) colors.border.copy(alpha = 0.4f) else colors.primary.copy(alpha = 0.45f)
+        )
+    }
+
     Card(
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = animatedCardBg),
         elevation = CardDefaults.cardElevation(defaultElevation = if (isCompleted || colors.isDark) 0.dp else 2.dp),
-        border = CardDefaults.outlinedCardBorder().copy(
-            brush = Brush.linearGradient(
-                listOf(
-                    if (isCompleted) colors.border.copy(alpha = 0.4f) else colors.primary.copy(alpha = 0.45f),
-                    if (isCompleted) colors.borderSubtle.copy(alpha = 0.3f) else colors.secondary.copy(alpha = 0.4f)
-                )
-            )
-        ),
+        border = CardDefaults.outlinedCardBorder().copy(brush = cardBorderBrush),
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
@@ -523,9 +523,7 @@ fun StreakCard(
         colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
         elevation = CardDefaults.cardElevation(defaultElevation = if (colors.isDark) 0.dp else 2.dp),
         border = CardDefaults.outlinedCardBorder().copy(
-            brush = Brush.linearGradient(
-                listOf(colors.primary.copy(alpha = 0.5f), colors.secondary.copy(alpha = 0.5f))
-            )
+            brush = androidx.compose.ui.graphics.SolidColor(colors.primary.copy(alpha = 0.5f))
         ),
         modifier = modifier
             .fillMaxWidth()
@@ -554,7 +552,10 @@ fun StreakCard(
                             Box(
                                 modifier = Modifier
                                     .size(38.dp)
-                                    .scale(glowScale.value)
+                                    .graphicsLayer {
+                                        scaleX = glowScale.value
+                                        scaleY = glowScale.value
+                                    }
                                     .clip(CircleShape)
                                     .background(
                                         Brush.radialGradient(
@@ -572,15 +573,18 @@ fun StreakCard(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
                                 .size(44.dp)
-                                .scale(flameScale.value * ambientPulse)
-                                .rotate(flameRotation.value)
+                                .graphicsLayer {
+                                    scaleX = flameScale.value * ambientPulse
+                                    scaleY = flameScale.value * ambientPulse
+                                    rotationZ = flameRotation.value
+                                }
                                 .clip(CircleShape)
                                 .background(
-                                    Brush.linearGradient(listOf(colors.pillBg, colors.surfaceElevated))
+                                    androidx.compose.ui.graphics.SolidColor(colors.pillBg)
                                 )
                                 .border(
                                     width = 1.5.dp,
-                                    brush = Brush.linearGradient(colors.primaryGradient),
+                                    brush = androidx.compose.ui.graphics.SolidColor(colors.primaryGradient.first()),
                                     shape = CircleShape
                                 )
                         ) {
@@ -649,7 +653,7 @@ fun StreakCard(
                             shape = RoundedCornerShape(10.dp),
                             color = colors.primary.copy(alpha = 0.15f),
                             border = CardDefaults.outlinedCardBorder().copy(
-                                brush = Brush.linearGradient(colors.primaryGradient)
+                                brush = androidx.compose.ui.graphics.SolidColor(colors.primaryGradient.first())
                             ),
                             modifier = Modifier.padding(bottom = 4.dp)
                         ) {
@@ -835,21 +839,20 @@ fun SatisfyingTaskCheckButton(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(40.dp)
-                .scale(scale)
-                .rotate(rotation)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    rotationZ = rotation
+                }
                 .clip(CircleShape)
                 .background(
-                    if (isCompleted) Brush.linearGradient(
-                        listOf(Color(0xFF10B981), Color(0xFF059669))
-                    )
-                    else Brush.linearGradient(listOf(colors.pillBg, colors.surfaceElevated))
+                    if (isCompleted) androidx.compose.ui.graphics.SolidColor(Color(0xFF10B981))
+                    else androidx.compose.ui.graphics.SolidColor(colors.pillBg)
                 )
                 .border(
                     width = 2.dp,
-                    brush = if (isCompleted) Brush.linearGradient(
-                        listOf(Color(0xFF34D399), Color(0xFF10B981))
-                    )
-                    else Brush.linearGradient(listOf(colors.border, colors.borderSubtle)),
+                    brush = if (isCompleted) androidx.compose.ui.graphics.SolidColor(Color(0xFF34D399))
+                    else androidx.compose.ui.graphics.SolidColor(colors.border),
                     shape = CircleShape
                 )
                 .clickable {

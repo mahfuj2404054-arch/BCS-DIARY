@@ -67,7 +67,9 @@ class StudyRepository(
     fun getExamLeaderboard(examId: String): Flow<List<com.example.data.model.ExamAttemptEntity>> = studyDao.getExamLeaderboard(examId)
     suspend fun insertExamAttempt(attempt: com.example.data.model.ExamAttemptEntity) {
         studyDao.insertExamAttempt(attempt)
-        firestoreSync?.saveExamAttempt(attempt)
+        val user = studyDao.getUserByIdDirect(attempt.userId)
+        val studentName = user?.name ?: "Student"
+        firestoreSync?.saveExamAttempt(attempt, studentName)
     }
 
     fun getUser(userId: String): Flow<UserEntity?> = studyDao.getUserById(userId)
@@ -128,9 +130,7 @@ class StudyRepository(
         examsListener?.remove()
         examsListener = fs.observeExams { firestoreExams, embeddedQuestions ->
             scope.launch(Dispatchers.IO) {
-                if (firestoreExams.isNotEmpty()) {
-                    studyDao.syncExamsTransaction(firestoreExams)
-                }
+                studyDao.syncExamsTransaction(firestoreExams)
                 if (embeddedQuestions.isNotEmpty()) {
                     studyDao.insertQuestions(embeddedQuestions)
                 }
@@ -141,9 +141,7 @@ class StudyRepository(
         questionsListener?.remove()
         questionsListener = fs.observeQuestions { firestoreQuestions ->
             scope.launch(Dispatchers.IO) {
-                if (firestoreQuestions.isNotEmpty()) {
-                    studyDao.insertQuestions(firestoreQuestions)
-                }
+                studyDao.syncQuestionsTransaction(firestoreQuestions)
             }
         }
 

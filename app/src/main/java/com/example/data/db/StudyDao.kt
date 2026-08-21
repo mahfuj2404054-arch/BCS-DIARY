@@ -39,9 +39,9 @@ interface StudyDao {
 
     @androidx.room.Transaction
     suspend fun syncUsersTransaction(users: List<UserEntity>) {
+        val fetchedIds = users.map { it.id }.toSet()
+        deleteUsersNotIn(fetchedIds)
         if (users.isNotEmpty()) {
-            val fetchedIds = users.map { it.id }.toSet()
-            deleteUsersNotIn(fetchedIds)
             insertUsers(users)
         }
     }
@@ -141,24 +141,24 @@ interface StudyDao {
 
     @androidx.room.Transaction
     suspend fun syncSubjectsTransaction(subjects: List<SubjectEntity>) {
+        deleteAllSubjects()
         if (subjects.isNotEmpty()) {
-            deleteAllSubjects()
             insertSubjects(subjects)
         }
     }
 
     @androidx.room.Transaction
     suspend fun syncTopicsTransaction(topics: List<TopicEntity>) {
+        deleteAllTopics()
         if (topics.isNotEmpty()) {
-            deleteAllTopics()
             insertTopics(topics)
         }
     }
 
     @androidx.room.Transaction
     suspend fun syncCompletionsTransaction(completions: List<TaskCompletionEntity>) {
+        deleteAllCompletions()
         if (completions.isNotEmpty()) {
-            deleteAllCompletions()
             insertCompletions(completions)
         }
     }
@@ -196,8 +196,8 @@ interface StudyDao {
 
     @androidx.room.Transaction
     suspend fun syncExamsTransaction(exams: List<com.example.data.model.ExamEntity>) {
+        deleteAllExams()
         if (exams.isNotEmpty()) {
-            deleteAllExams()
             insertExams(exams)
         }
     }
@@ -226,8 +226,8 @@ interface StudyDao {
 
     @androidx.room.Transaction
     suspend fun syncQuestionsTransaction(questions: List<com.example.data.model.QuestionEntity>) {
+        deleteAllQuestions()
         if (questions.isNotEmpty()) {
-            deleteAllQuestions()
             insertQuestions(questions)
         }
     }

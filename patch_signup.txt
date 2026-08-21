@@ -1,0 +1,31 @@
+    /**
+     * Firebase Sign Up with Email and Password
+     */
+    fun signUpWithEmail(name: String, email: String, password: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isAuthLoading.value = true
+            _authErrorMessage.value = null
+            when (val result = authService.signUpWithEmail(name, email, password)) {
+                is AuthResultState.Success -> {
+                    val restoredUser = restoreOrCreateUserProfile(result.user, true)
+                    _currentUser.value = restoredUser
+                    startListeningToCurrentUser(restoredUser.id)
+                    _isAuthLoading.value = false
+                    try {
+                        repository.startFirestoreSync(viewModelScope)
+                    } catch (e: Exception) {
+                        // Ignore
+                    }
+                    _eventFlow.emit(UiEvent.ShowToast("Welcome to BCS Diary, ${restoredUser.name}! ✨"))
+                }
+                is AuthResultState.Error -> {
+                    _isAuthLoading.value = false
+                    _authErrorMessage.value = result.message
+                    _eventFlow.emit(UiEvent.ShowToast(result.message))
+                }
+                is AuthResultState.Cancelled -> {
+                    _isAuthLoading.value = false
+                }
+            }
+        }
+    }

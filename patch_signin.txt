@@ -1,0 +1,63 @@
+    fun signInWithGoogle(activityContext: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isAuthLoading.value = true
+            _authErrorMessage.value = null
+            when (val result = authService.signInWithGoogle(activityContext)) {
+                is AuthResultState.Success -> {
+                    val restoredUser = restoreOrCreateUserProfile(result.user, result.isNewUser)
+                    _currentUser.value = restoredUser
+                    startListeningToCurrentUser(restoredUser.id)
+                    _isAuthLoading.value = false
+                    try {
+                        repository.startFirestoreSync(viewModelScope)
+                    } catch (e: Exception) {
+                        // Ignore
+                    }
+                    val msg = if (result.isNewUser) {
+                        "Welcome to BCS Diary, ${restoredUser.name}! ✨"
+                    } else {
+                        "Welcome back, ${restoredUser.name}! 💕"
+                    }
+                    _eventFlow.emit(UiEvent.ShowToast(msg))
+                }
+                is AuthResultState.Error -> {
+                    _isAuthLoading.value = false
+                    _authErrorMessage.value = result.message
+                    _eventFlow.emit(UiEvent.ShowToast(result.message))
+                }
+                is AuthResultState.Cancelled -> {
+                    _isAuthLoading.value = false
+                }
+            }
+        }
+    }
+
+    /**
+     * Quick Demo Sign-In for testing without Google Credentials
+     */
+    fun signInWithDemoStudent() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isAuthLoading.value = true
+            _authErrorMessage.value = null
+            val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+            val demoUser = UserEntity(
+                id = "demo_student_bcs",
+                name = "Demo Student",
+                email = "demo.student@bcsdiary.app",
+                role = UserRole.STUDENT,
+                avatarColorHex = "#3B82F6",
+                streakDays = 5,
+                lastActiveDate = today
+            )
+            val restoredUser = restoreOrCreateUserProfile(demoUser, false)
+            _currentUser.value = restoredUser
+            startListeningToCurrentUser(restoredUser.id)
+            _isAuthLoading.value = false
+            try {
+                repository.startFirestoreSync(viewModelScope)
+            } catch (e: Exception) {
+                // Ignore
+            }
+            _eventFlow.emit(UiEvent.ShowToast("Signed in as Demo Student! ✨"))
+        }
+    }

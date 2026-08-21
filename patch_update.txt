@@ -1,0 +1,39 @@
+    fun updateUserProfile(
+        newName: String,
+        photoUri: String?,
+        dateOfBirth: String?,
+        bio: String?,
+        schoolOrGrade: String?,
+        avatarColorHex: String
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val user = _currentUser.value ?: return@launch
+            var finalPhotoUri = photoUri
+            
+            // If the photoUri is a local URI, upload it to Firebase Storage
+            if (photoUri != null && (photoUri.startsWith("content://") || photoUri.startsWith("file://"))) {
+                try {
+                    val storageRef = FirebaseStorage.getInstance().reference
+                        .child("profile_photos/${user.id}/avatar.jpg")
+                    storageRef.putFile(Uri.parse(photoUri)).await()
+                    finalPhotoUri = storageRef.downloadUrl.await().toString()
+                } catch (e: Exception) {
+                    // Upload failed, keep previous cloud photo
+                    finalPhotoUri = user.photoUri
+                    _eventFlow.emit(UiEvent.ShowToast("Failed to upload profile photo"))
+                }
+            }
+            
+            val updatedUser = user.copy(
+                name = newName.trim().ifEmpty { user.name },
+                photoUri = finalPhotoUri,
+                dateOfBirth = dateOfBirth?.trim()?.ifEmpty { null },
+                bio = bio?.trim()?.ifEmpty { null },
+                schoolOrGrade = schoolOrGrade?.trim()?.ifEmpty { null },
+                avatarColorHex = avatarColorHex
+            )
+            repository.insertUser(updatedUser)
+            _currentUser.value = updatedUser
+            _eventFlow.emit(UiEvent.ShowToast("Profile updated successfully! ✨"))
+        }
+    }

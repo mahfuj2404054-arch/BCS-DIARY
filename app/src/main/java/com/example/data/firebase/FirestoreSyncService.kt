@@ -106,6 +106,45 @@ class FirestoreSyncService(private val context: Context) {
         }
     }
 
+    fun observeCurrentUser(userId: String, onUserChanged: (UserEntity) -> Unit): ListenerRegistration? {
+        val db = firestore ?: return null
+        return try {
+            db.collection("users").document(userId).addSnapshotListener { doc, error ->
+                if (error != null) {
+                    Log.e(tag, "Listen failed for current user: ${error.message}")
+                    return@addSnapshotListener
+                }
+                if (doc != null && doc.exists()) {
+                    try {
+                        val user = UserEntity(
+                            id = doc.getString("id") ?: doc.id,
+                            name = doc.getString("name") ?: "Student",
+                            email = doc.getString("email") ?: "",
+                            role = try {
+                                UserRole.valueOf(doc.getString("role") ?: "STUDENT")
+                            } catch (_: Exception) {
+                                UserRole.STUDENT
+                            },
+                            avatarColorHex = doc.getString("avatarColorHex") ?: "#8B5CF6",
+                            photoUri = doc.getString("photoUri"),
+                            dateOfBirth = doc.getString("dateOfBirth"),
+                            bio = doc.getString("bio"),
+                            schoolOrGrade = doc.getString("schoolOrGrade"),
+                            streakDays = doc.getLong("streakDays")?.toInt() ?: 1,
+                            lastActiveDate = doc.getString("lastActiveDate") ?: ""
+                        )
+                        onUserChanged(user)
+                    } catch (e: Exception) {
+                        Log.e(tag, "Error parsing current user doc: ${e.message}")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to observe current user: ${e.message}")
+            null
+        }
+    }
+
     fun observeUsers(onUsersChanged: (List<UserEntity>) -> Unit): ListenerRegistration? {
         val db = firestore ?: return null
         return try {
@@ -673,6 +712,13 @@ class FirestoreSyncService(private val context: Context) {
 
             val timeLimit = (map["timeLimitSeconds"] ?: map["timeLimit"] ?: map["timer"] ?: map["duration"] ?: 30).toString().toIntOrNull() ?: 30
 
+            val explanation = (
+                map["explanation"]
+                    ?: map["answerExplanation"]
+                    ?: map["solution"]
+                    ?: ""
+            ).toString()
+
             return QuestionEntity(
                 id = qId,
                 examId = examId,
@@ -682,7 +728,8 @@ class FirestoreSyncService(private val context: Context) {
                 optionC = optC,
                 optionD = optD,
                 correctOption = correctOption,
-                timeLimitSeconds = timeLimit
+                timeLimitSeconds = timeLimit,
+                explanation = explanation
             )
         } catch (e: Exception) {
             Log.e(tag, "Error parsing question map: ${e.message}")
@@ -814,12 +861,13 @@ class FirestoreSyncService(private val context: Context) {
     // EXAM ATTEMPTS
     // ==========================================
 
-    suspend fun saveExamAttempt(attempt: ExamAttemptEntity) {
+    suspend fun saveExamAttempt(attempt: ExamAttemptEntity, studentName: String) {
         val db = firestore ?: return
         try {
             val attemptMap = hashMapOf(
                 "id" to attempt.id,
                 "userId" to attempt.userId,
+                "studentName" to studentName,
                 "examId" to attempt.examId,
                 "score" to attempt.score,
                 "correctCount" to attempt.correctCount,

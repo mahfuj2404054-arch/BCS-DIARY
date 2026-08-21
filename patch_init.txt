@@ -1,0 +1,91 @@
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val firebaseUser = authService.currentFirebaseUser
+                if (firebaseUser != null) {
+                    val fallbackUser = UserEntity(
+                        id = firebaseUser.uid,
+                        name = firebaseUser.displayName?.ifBlank { null }
+                            ?: firebaseUser.email?.substringBefore("@")?.replaceFirstChar { it.uppercase() }
+                            ?: "Student",
+                        email = firebaseUser.email.orEmpty(),
+                        role = UserRole.STUDENT,
+                        avatarColorHex = "#8B5CF6",
+                        streakDays = 0,
+                        lastActiveDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                    )
+                    val restoredUser = restoreOrCreateUserProfile(fallbackUser, isNewUser = false)
+                    _currentUser.value = restoredUser
+                    startListeningToCurrentUser(restoredUser.id)
+                } else {
+                    _currentUser.value = null
+                }
+            } catch (e: Exception) {
+                // Ignore any auth check failure on cold start
+                _currentUser.value = null
+            } finally {
+                _isProfileLoading.value = false
+            }
+
+            try {
+                repository.startFirestoreSync(viewModelScope)
+            } catch (e: Exception) {
+                // Ignore sync errors on cold start
+            }
+        }
+        
+        // Auto-reconnect Firestore listeners when Firebase Auth state becomes valid
+        authStateListener = FirebaseAuth.AuthStateListener { auth ->
+            val user = auth.currentUser
+            if (user != null) {
+                viewModelScope.launch {
+                    try {
+                        repository.startFirestoreSync(viewModelScope)
+                    } catch (e: Exception) {
+                        // Ignore
+                    }
+                }
+            } else {
+                _currentUser.value = null
+                currentUserListener?.remove()
+                currentUserListener = null
+            }
+        }
+        try {
+            FirebaseAuth.getInstance().addAuthStateListener(authStateListener!!)
+        } catch (e: Exception) {
+            // Ignore if Firebase isn't initialized
+        }
+    }
+
+    private suspend fun restoreOrCreateUserProfile(
+        authenticatedUser: UserEntity,
+        isNewUser: Boolean
+    ): UserEntity {
+        try {
+            val existingProfile = firestoreSync.getUser(authenticatedUser.id)
+            if (existingProfile != null) {
+                repository.insertUser(existingProfile)
+                prefs.edit().putString("logged_in_user_id", existingProfile.id).apply()
+                return existingProfile
+            }
+        } catch (e: Exception) {
+            // ignore
+        }
+        
+        repository.insertUser(authenticatedUser)
+        prefs.edit().putString("logged_in_user_id", authenticatedUser.id).apply()
+        return authenticatedUser
+    }
+
+    private fun startListeningToCurrentUser(userId: String) {
+        currentUserListener?.remove()
+        currentUserListener = firestoreSync.observeCurrentUser(userId) { user ->
+            _currentUser.value = user
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    repository.insertUser(user)
+                } catch (e: Exception) {}
+            }
+        }
+    }

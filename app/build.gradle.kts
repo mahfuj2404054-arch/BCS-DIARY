@@ -104,6 +104,7 @@ dependencies {
   // Firestore & Firebase Auth + Google Sign-In via Credential Manager
   implementation(libs.firebase.firestore)
   implementation(libs.firebase.auth)
+  implementation(libs.firebase.storage)
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)
   implementation(libs.googleid)

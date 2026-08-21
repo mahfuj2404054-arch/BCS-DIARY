@@ -1,0 +1,76 @@
+    /**
+     * Firebase Sign In with Email and Password
+     */
+    fun signInWithEmail(email: String, password: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isAuthLoading.value = true
+            _authErrorMessage.value = null
+            when (val result = authService.signInWithEmail(email, password)) {
+                is AuthResultState.Success -> {
+                    val restoredUser = restoreOrCreateUserProfile(result.user, false)
+                    _currentUser.value = restoredUser
+                    startListeningToCurrentUser(restoredUser.id)
+                    _isAuthLoading.value = false
+                    try {
+                        repository.startFirestoreSync(viewModelScope)
+                    } catch (e: Exception) {
+                        // Ignore
+                    }
+                    _eventFlow.emit(UiEvent.ShowToast("Welcome back, ${restoredUser.name}! 💕"))
+                }
+                is AuthResultState.Error -> {
+                    _isAuthLoading.value = false
+                    // If offline or Firebase is unreachable, fallback to matching existing Room user
+                    if (!authService.isFirebaseAvailable() || result.message.contains("network", ignoreCase = true)) {
+                        registerOrLogin("Student", email)
+                    } else {
+                        _authErrorMessage.value = result.message
+                        _eventFlow.emit(UiEvent.ShowToast(result.message))
+                    }
+                }
+                is AuthResultState.Cancelled -> {
+                    _isAuthLoading.value = false
+                }
+            }
+        }
+    }
+
+    fun registerOrLogin(name: String, email: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val cleanEmail = email.trim().lowercase()
+            val cleanName = name.trim().ifBlank { "Student" }
+
+            val existing = allUsers.value.find { it.email.lowercase() == cleanEmail && cleanEmail.isNotEmpty() }
+                ?: if (cleanEmail.isEmpty() || cleanEmail == "student@bcs.com") defaultStudentUser else null
+
+            if (existing != null) {
+                _currentUser.value = existing
+                startListeningToCurrentUser(existing.id)
+                prefs.edit().putString("logged_in_user_id", existing.id).apply()
+                try {
+                    repository.startFirestoreSync(viewModelScope)
+                } catch (e: Exception) {
+                    // Ignore
+                }
+                _eventFlow.emit(UiEvent.ShowToast("Welcome back, ${existing.name}! 💕"))
+            } else {
+                val userIdHash = cleanEmail.hashCode().let { if (it < 0) -it else it }
+                val newUser = UserEntity(
+                    id = "student_$userIdHash",
+                    name = cleanName,
+                    email = cleanEmail,
+                    role = UserRole.STUDENT,
+                    avatarColorHex = "#8B5CF6",
+                    streakDays = 1,
+                    lastActiveDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+                )
+                val restoredUser = restoreOrCreateUserProfile(newUser, true)
+                _currentUser.value = restoredUser
+                startListeningToCurrentUser(restoredUser.id)
+                try {
+                    repository.startFirestoreSync(viewModelScope)
+                } catch (e: Exception) {}
+                _eventFlow.emit(UiEvent.ShowToast("Welcome to BCS Diary, ${restoredUser.name}! ✨"))
+            }
+        }
+    }

@@ -187,7 +187,7 @@ fun TaskDetailScreen(
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
                 border = CardDefaults.outlinedCardBorder().copy(
-                    brush = Brush.linearGradient(listOf(colors.border, colors.borderSubtle))
+                    brush = androidx.compose.ui.graphics.SolidColor(colors.border)
                 ),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -254,7 +254,7 @@ fun TaskDetailScreen(
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
                     border = CardDefaults.outlinedCardBorder().copy(
-                        brush = Brush.linearGradient(listOf(colors.border, colors.borderSubtle))
+                        brush = androidx.compose.ui.graphics.SolidColor(colors.border)
                     ),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -281,12 +281,7 @@ fun TaskDetailScreen(
                 shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
                 border = CardDefaults.outlinedCardBorder().copy(
-                    brush = Brush.linearGradient(
-                        listOf(
-                            colors.primary.copy(alpha = 0.4f),
-                            colors.secondary.copy(alpha = 0.4f)
-                        )
-                    )
+                    brush = androidx.compose.ui.graphics.SolidColor(colors.primary.copy(alpha = 0.4f))
                 ),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -381,7 +376,7 @@ fun TaskDetailScreen(
                 shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
                 border = CardDefaults.outlinedCardBorder().copy(
-                    brush = Brush.linearGradient(listOf(colors.border, colors.borderSubtle))
+                    brush = androidx.compose.ui.graphics.SolidColor(colors.border)
                 ),
                 modifier = Modifier.fillMaxWidth()
             ) {

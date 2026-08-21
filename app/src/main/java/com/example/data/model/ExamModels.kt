@@ -23,7 +23,8 @@ data class QuestionEntity(
     val optionC: String,
     val optionD: String,
     val correctOption: String, // "A", "B", "C", "D"
-    val timeLimitSeconds: Int = 30
+    val timeLimitSeconds: Int = 30,
+    val explanation: String = ""
 )
 
 @Entity(tableName = "exam_attempts")
@@ -46,5 +47,11 @@ data class ExamLeaderboardEntry(
     val score: Int,
     val timeSeconds: Int,
     val completedAt: Long
+)
+
+data class ExamReviewItem(
+    val question: QuestionEntity,
+    val selectedOption: String?, // null means skipped
+    val wasTimeUp: Boolean = false
 )
 

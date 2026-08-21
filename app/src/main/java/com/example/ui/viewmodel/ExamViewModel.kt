@@ -23,6 +23,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import com.example.data.model.ExamLeaderboardEntry
 import kotlinx.coroutines.launch
 
+import com.google.firebase.auth.FirebaseAuth
+
 enum class QuestionFeedback {
     NONE, CORRECT, WRONG, TIME_UP
 }
@@ -31,6 +33,8 @@ class ExamViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getDatabase(application)
     private val repository = StudyRepository(db.studyDao(), FirestoreSyncService(application))
     private val prefs = application.getSharedPreferences("study_diary_prefs", android.content.Context.MODE_PRIVATE)
+    
+    private var authStateListener: FirebaseAuth.AuthStateListener? = null
 
     val publishedExams: StateFlow<List<ExamEntity>> = repository.allPublishedExams
         .combine(repository.allExams) { published, all ->
@@ -38,10 +42,30 @@ class ExamViewModel(application: Application) : AndroidViewModel(application) {
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val currentUserId = prefs.getString("logged_in_user_id", null) ?: ""
+    private val _currentUserId = MutableStateFlow(
+        prefs.getString("logged_in_user_id", null).orEmpty()
+    )
+    val currentUserId: StateFlow<String> = _currentUserId.asStateFlow()
 
-    val userExamAttempts: StateFlow<List<ExamAttemptEntity>> = repository.getExamAttemptsForUser(currentUserId)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    fun setCurrentUserId(userId: String?) {
+        _currentUserId.value = userId.orEmpty()
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val userExamAttempts: StateFlow<List<ExamAttemptEntity>> =
+        _currentUserId
+            .flatMapLatest { userId ->
+                if (userId.isBlank()) {
+                    flowOf(emptyList())
+                } else {
+                    repository.getExamAttemptsForUser(userId)
+                }
+            }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5000),
+                emptyList()
+            )
 
     val pendingExams: StateFlow<List<ExamEntity>> = publishedExams.combine(userExamAttempts) { exams, attempts ->
         val completedExamIds = attempts.map { it.examId }.toSet()
@@ -77,6 +101,9 @@ class ExamViewModel(application: Application) : AndroidViewModel(application) {
     private val _isExamFinished = MutableStateFlow(false)
     val isExamFinished: StateFlow<Boolean> = _isExamFinished.asStateFlow()
 
+    private val _examReviewItems = MutableStateFlow<List<com.example.data.model.ExamReviewItem>>(emptyList())
+    val examReviewItems: StateFlow<List<com.example.data.model.ExamReviewItem>> = _examReviewItems.asStateFlow()
+
     private var score = 0
     private var correctCount = 0
     private var wrongCount = 0
@@ -90,6 +117,11 @@ class ExamViewModel(application: Application) : AndroidViewModel(application) {
     val examWrongCount get() = wrongCount
     val examSkippedCount get() = skippedCount
     val examTotalTime get() = totalTimeTaken
+
+    private val _endedEarly = MutableStateFlow(false)
+    val endedEarly: StateFlow<Boolean> = _endedEarly.asStateFlow()
+
+    private var attemptSaved = false
 
     private val _leaderboardExamId = MutableStateFlow<String?>(null)
 
@@ -138,6 +170,30 @@ class ExamViewModel(application: Application) : AndroidViewModel(application) {
                 // Ignore sync errors on launch
             }
         }
+        
+        // Restart sync automatically when user signs in (auth state changes to non-null)
+        authStateListener = FirebaseAuth.AuthStateListener { auth ->
+            if (auth.currentUser != null) {
+                viewModelScope.launch {
+                    try {
+                        repository.startFirestoreSync(viewModelScope)
+                    } catch (e: Exception) {
+                        // Ignore
+                    }
+                }
+            } else {
+                repository.stopFirestoreSync()
+            }
+        }
+        FirebaseAuth.getInstance().addAuthStateListener(authStateListener!!)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        authStateListener?.let {
+            FirebaseAuth.getInstance().removeAuthStateListener(it)
+        }
+        repository.stopFirestoreSync()
     }
 
     fun refreshExams() {
@@ -181,6 +237,8 @@ class ExamViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startExam() {
+        attemptSaved = false
+        _endedEarly.value = false
         score = 0
         correctCount = 0
         wrongCount = 0
@@ -188,6 +246,7 @@ class ExamViewModel(application: Application) : AndroidViewModel(application) {
         totalTimeTaken = 0
         _currentQuestionIndex.value = 0
         _isExamFinished.value = false
+        _examReviewItems.value = emptyList()
         startQuestion()
     }
 
@@ -220,6 +279,16 @@ class ExamViewModel(application: Application) : AndroidViewModel(application) {
     private fun handleTimeUp() {
         _feedback.value = QuestionFeedback.TIME_UP
         skippedCount++
+        
+        val question = _examQuestions.value.getOrNull(_currentQuestionIndex.value)
+        if (question != null) {
+            _examReviewItems.value += com.example.data.model.ExamReviewItem(
+                question = question,
+                selectedOption = null,
+                wasTimeUp = true
+            )
+        }
+        
         timerJob?.cancel()
         viewModelScope.launch {
             delay(2000) // Show feedback for 2 seconds
@@ -243,6 +312,12 @@ class ExamViewModel(application: Application) : AndroidViewModel(application) {
             wrongCount++
         }
 
+        _examReviewItems.value += com.example.data.model.ExamReviewItem(
+            question = question,
+            selectedOption = option,
+            wasTimeUp = false
+        )
+
         viewModelScope.launch {
             delay(2000) // Show feedback for 2 seconds
             nextQuestion()
@@ -259,14 +334,30 @@ class ExamViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun quitExam() {
-        timerJob?.cancel()
-        _isExamFinished.value = true
+        finalizeExam(endedEarly = true)
     }
 
     private fun finishExam() {
+        finalizeExam(endedEarly = false)
+    }
+
+    private fun finalizeExam(endedEarly: Boolean) {
+        if (attemptSaved) return
+        attemptSaved = true
+
+        timerJob?.cancel()
+        _endedEarly.value = endedEarly
+
+        val unansweredQuestions =
+            (_examQuestions.value.size - correctCount - wrongCount - skippedCount)
+                .coerceAtLeast(0)
+
+        skippedCount += unansweredQuestions
         _isExamFinished.value = true
+
         val userId = prefs.getString("logged_in_user_id", null)
         val examId = _selectedExam.value?.id
+
         if (userId != null && examId != null) {
             viewModelScope.launch {
                 repository.insertExamAttempt(
@@ -277,7 +368,8 @@ class ExamViewModel(application: Application) : AndroidViewModel(application) {
                         correctCount = correctCount,
                         wrongCount = wrongCount,
                         skippedCount = skippedCount,
-                        totalTimeSeconds = totalTimeTaken
+                        totalTimeSeconds = totalTimeTaken,
+                        completedAt = System.currentTimeMillis()
                     )
                 )
             }

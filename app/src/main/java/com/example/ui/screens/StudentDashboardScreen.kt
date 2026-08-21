@@ -604,7 +604,7 @@ fun StudentDashboardScreen(
                         shape = RoundedCornerShape(12.dp),
                         color = colors.surface,
                         border = CardDefaults.outlinedCardBorder().copy(
-                            brush = Brush.linearGradient(listOf(colors.border, colors.borderSubtle))
+                            brush = androidx.compose.ui.graphics.SolidColor(colors.border)
                         )
                     ) {
                         Text(
@@ -636,7 +636,7 @@ fun StudentDashboardScreen(
                                 shape = RoundedCornerShape(14.dp),
                                 color = if (isSelected) colors.primary else colors.surface,
                                 border = if (isSelected) null else CardDefaults.outlinedCardBorder().copy(
-                                    brush = Brush.linearGradient(listOf(colors.border, colors.borderSubtle))
+                                    brush = androidx.compose.ui.graphics.SolidColor(colors.border)
                                 ),
                                 modifier = Modifier
                                     .weight(1f)
@@ -668,7 +668,7 @@ fun StudentDashboardScreen(
                     shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = colors.cardBackground),
                     border = CardDefaults.outlinedCardBorder().copy(
-                        brush = Brush.linearGradient(listOf(colors.border, colors.borderSubtle))
+                        brush = androidx.compose.ui.graphics.SolidColor(colors.border)
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
